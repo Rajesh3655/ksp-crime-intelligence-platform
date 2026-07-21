@@ -1,18 +1,27 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   ResponsiveContainer, AreaChart, Area, XAxis, YAxis, CartesianGrid,
-  Tooltip, BarChart, Bar, PieChart, Pie, Cell, LineChart, Line, Legend,
+  Tooltip, PieChart, Pie, Cell, Legend,
 } from 'recharts';
 import {
-  AlertTriangle, TrendingUp, TrendingDown, Minus,
-  Users, Shield, Activity, Clock, MapPin, ChevronRight,
-  Zap, Target, Radio,
+  Activity, Clock, ChevronRight, Zap,
 } from 'lucide-react';
 import {
   STATE_KPIs, CRIME_TREND_30, DISTRICTS, RECENT_INCIDENTS,
-  ALERTS, CRIME_DISTRIBUTION, RESOURCES,
+  ALERTS, CRIME_DISTRIBUTION,
 } from '../../data/mockData';
+import {
+  CrimeDnaPanel,
+  DigitalCrimeTwin,
+  DistrictComparisonPanel,
+  ExecutiveKpiGrid,
+  ExplainableAICard,
+  GangIntelligencePanel,
+  JudgeImpactPanel,
+  ResourceOptimizerPanel,
+  TimelineAnalyticsPanel,
+} from '../../components/intelligence/EnterprisePanels';
 
 const SeverityBadge: React.FC<{ sev: string }> = ({ sev }) => (
   <span className={`badge badge-${sev}`}>
@@ -26,23 +35,6 @@ const StatusBadge: React.FC<{ status: string }> = ({ status }) => {
   return <span className={`badge badge-${map[status] || 'neutral'}`}>{status.charAt(0).toUpperCase() + status.slice(1)}</span>;
 };
 
-const KPICard: React.FC<{
-  label: string; value: string | number; delta?: number;
-  icon: React.ReactNode; severity?: string; unit?: string;
-}> = ({ label, value, delta, icon, severity, unit }) => (
-  <div className={`kpi-card ${severity || ''}`}>
-    <div className="kpi-icon">{icon}</div>
-    <div className="kpi-label">{label}</div>
-    <div className="kpi-value">{value}{unit && <span style={{ fontSize: '1rem', marginLeft: 4, color: 'var(--text-secondary)' }}>{unit}</span>}</div>
-    {delta !== undefined && (
-      <div className={`kpi-delta ${delta > 0 ? 'up' : delta < 0 ? 'down' : ''}`}>
-        {delta > 0 ? <TrendingUp size={12} /> : delta < 0 ? <TrendingDown size={12} /> : <Minus size={12} />}
-        <span>{Math.abs(delta)} from yesterday</span>
-      </div>
-    )}
-  </div>
-);
-
 const customTooltipStyle = {
   background: 'var(--navy-800)',
   border: '1px solid var(--border-default)',
@@ -54,8 +46,14 @@ const customTooltipStyle = {
 
 const CommandCenter: React.FC = () => {
   const { t } = useTranslation();
-  const [selectedDistrict, setSelectedDistrict] = useState<string | null>(null);
   const [timeFilter, setTimeFilter] = useState('30d');
+  const [lastRefreshedAt, setLastRefreshedAt] = useState(() => new Date());
+
+  useEffect(() => {
+    const refreshHandler = () => setLastRefreshedAt(new Date());
+    window.addEventListener('ciap:refresh', refreshHandler as EventListener);
+    return () => window.removeEventListener('ciap:refresh', refreshHandler as EventListener);
+  }, []);
 
   const kpi = STATE_KPIs;
   const criticalAlerts = ALERTS.filter(a => a.severity === 'critical' && a.status === 'active');
@@ -72,7 +70,9 @@ const CommandCenter: React.FC = () => {
         <div className="page-header-actions">
           <div className="flex items-center gap-2">
             <span className="live-dot" />
-            <span className="text-caption text-muted">{t('common_live')} · Updated 2 mins ago</span>
+            <span className="text-caption text-muted">
+              {t('common_live')} · Updated {lastRefreshedAt.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+            </span>
           </div>
           <select className="select" value={timeFilter} onChange={e => setTimeFilter(e.target.value)}>
             <option value="7d">{t('common_last_7')}</option>
@@ -105,20 +105,18 @@ const CommandCenter: React.FC = () => {
         </div>
       )}
 
-      {/* KPI Row 1 */}
-      <div className="grid grid-4 mb-6" style={{ gap: 'var(--space-4)' }}>
-        <KPICard label={t('dash_incidents_today')} value={kpi.incidentsToday} delta={kpi.incidentsDelta} icon={<Activity size={40} />} severity="critical" />
-        <KPICard label={t('dash_open_firs')} value={kpi.openFIRs.toLocaleString()} delta={kpi.openFIRsDelta} icon={<Shield size={40} />} />
-        <KPICard label={t('dash_active_alerts')} value={kpi.activeAlerts} delta={kpi.alertsDelta} icon={<AlertTriangle size={40} />} severity="high" />
-        <KPICard label={t('dash_arrests_today')} value={kpi.arrestsToday} delta={kpi.arrestsDelta} icon={<Users size={40} />} severity="low" />
-      </div>
+      <ExecutiveKpiGrid />
 
-      {/* KPI Row 2 */}
-      <div className="grid grid-4 mb-6" style={{ gap: 'var(--space-4)' }}>
-        <KPICard label={t('dash_risk_score')} value={kpi.stateRiskScore} delta={kpi.riskDelta} icon={<Target size={40} />} severity="high" unit="/100" />
-        <KPICard label={t('dash_hotspot_districts')} value={kpi.hotspotDistricts} icon={<MapPin size={40} />} severity="medium" />
-        <KPICard label={t('dash_resources_deployed')} value={kpi.resourcesDeployed.toLocaleString()} delta={kpi.resourcesDelta} icon={<Radio size={40} />} severity="low" />
-        <KPICard label="Closure Rate" value={`${kpi.closureRate}%`} icon={<TrendingUp size={40} />} severity="low" />
+      <div className="grid grid-2 mb-6" style={{ gap: 'var(--space-4)', marginTop: 'var(--space-4)' }}>
+        <ExplainableAICard
+          title="Hotspot Prediction"
+          prediction="High Risk: Bengaluru South commercial corridor"
+          confidence={94}
+          features={['34% increase in theft', 'Repeat offenders nearby', 'Festival week', 'Similar pattern in previous 3 years']}
+          evidence={['CaseMaster cluster HOT-b91f28', 'MO cluster MO-8f2a91', '3 prior weekly spikes']}
+          recommendation="Deploy 3 additional patrol units and one mobile checkpoint."
+        />
+        <DigitalCrimeTwin />
       </div>
 
       {/* Main Content Grid */}
@@ -172,7 +170,7 @@ const CommandCenter: React.FC = () => {
                   <Cell key={i} fill={entry.color} />
                 ))}
               </Pie>
-              <Tooltip contentStyle={customTooltipStyle} formatter={(v: number) => [`${v}%`, '']} />
+              <Tooltip contentStyle={customTooltipStyle} formatter={(v) => [`${v}%`, '']} />
             </PieChart>
           </ResponsiveContainer>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
@@ -208,7 +206,7 @@ const CommandCenter: React.FC = () => {
                 }}
                 onMouseEnter={e => (e.currentTarget.style.background = 'var(--bg-hover)')}
                 onMouseLeave={e => (e.currentTarget.style.background = '')}
-                onClick={() => setSelectedDistrict(d.name)}
+                onClick={() => undefined}
               >
                 <span className="text-muted text-caption" style={{ width: 18, textAlign: 'right' }}>{i + 1}</span>
                 <div className="flex-1 min-w-0">
@@ -272,32 +270,22 @@ const CommandCenter: React.FC = () => {
       </div>
 
       {/* Resource Allocation */}
-      <div className="card mt-4">
-        <div className="card-header mb-4">
-          <div className="card-title">{t('dash_resource_allocation')}</div>
-          <button className="btn btn-ghost btn-sm">Manage →</button>
-        </div>
-        <div className="grid grid-3" style={{ gap: 'var(--space-4)' }}>
-          {RESOURCES.map(r => (
-            <div key={r.district} style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-              <div className="flex items-center justify-between">
-                <span className="text-sm" style={{ fontWeight: 500 }}>{r.district}</span>
-                <span className={`badge badge-${r.utilization >= 90 ? 'critical' : r.utilization >= 75 ? 'high' : 'medium'}`}>
-                  {r.utilization}%
-                </span>
-              </div>
-              <div className="text-caption text-muted">
-                {r.deployed.toLocaleString()} / {r.personnel.toLocaleString()} personnel · {r.vehicles} vehicles
-              </div>
-              <div className="progress-bar">
-                <div
-                  className={`progress-fill ${r.utilization >= 90 ? 'critical' : r.utilization >= 75 ? 'high' : 'medium'}`}
-                  style={{ width: `${r.utilization}%` }}
-                />
-              </div>
-            </div>
-          ))}
-        </div>
+      <div className="grid grid-2 mt-4" style={{ gap: 'var(--space-4)' }}>
+        <ResourceOptimizerPanel />
+        <GangIntelligencePanel />
+      </div>
+
+      <div className="grid grid-2 mt-4" style={{ gap: 'var(--space-4)' }}>
+        <CrimeDnaPanel />
+        <TimelineAnalyticsPanel />
+      </div>
+
+      <div className="mt-4">
+        <DistrictComparisonPanel />
+      </div>
+
+      <div className="mt-4">
+        <JudgeImpactPanel />
       </div>
     </div>
   );

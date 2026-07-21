@@ -2,10 +2,9 @@ import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   AlertTriangle, Bell, CheckCircle, ArrowUp, Clock, User, MapPin,
-  Filter, RefreshCw, ChevronRight, Zap, Shield, Eye,
+  Filter, RefreshCw, Zap, Shield, Eye,
 } from 'lucide-react';
 import { ALERTS } from '../../data/mockData';
-import { format } from 'date-fns';
 
 type AlertStatus = 'active' | 'acknowledged' | 'resolved';
 

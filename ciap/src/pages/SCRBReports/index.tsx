@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Download, FileText, BarChart3, Brain, Calendar, RefreshCw, CheckCircle, Clock } from 'lucide-react';
+import { Download, FileText, BarChart3, Brain, RefreshCw, CheckCircle, Clock } from 'lucide-react';
 import { GENERATED_REPORTS, DISTRICTS } from '../../data/mockData';
 
 const SCRBReports: React.FC = () => {

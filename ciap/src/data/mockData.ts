@@ -153,15 +153,6 @@ export const LINK_EDGES = [
   { source: 'VH1', target: 'L2', label: 'Seen at' },
 ];
 
-// ── Citizen Reports ────────────────────────────────────────────────────────
-export const CITIZEN_REPORTS = [
-  { id: 'CR-001', description: 'Suspicious vehicles parked near market at night, possible gang activity', location: 'KR Market, Bengaluru', lat: 12.9632, lng: 77.5771, time: '2 hrs ago', status: 'pending', category: 'Gang Activity' },
-  { id: 'CR-002', description: 'Drug peddling reported near school premises', location: 'Rajajinagar, Bengaluru', lat: 12.9922, lng: 77.5568, time: '5 hrs ago', status: 'verified', category: 'Drug Offences' },
-  { id: 'CR-003', description: 'Chain snatching incident near ATM', location: 'Malleshwaram, Bengaluru', lat: 13.0037, lng: 77.5644, time: '8 hrs ago', status: 'verified', category: 'Theft' },
-  { id: 'CR-004', description: 'Domestic dispute with suspected violence', location: 'Jayanagar, Bengaluru', lat: 12.9308, lng: 77.5838, time: '12 hrs ago', status: 'rejected', category: 'Domestic Violence' },
-  { id: 'CR-005', description: 'Online fraud — lost Rs 85,000 to fake investment scheme', location: 'Koramangala, Bengaluru', lat: 12.9352, lng: 77.6245, time: '1 day ago', status: 'verified', category: 'Cybercrime' },
-];
-
 // ── Resource Allocation ────────────────────────────────────────────────────
 export const RESOURCES = [
   { district: 'Bengaluru Urban', personnel: 4200, vehicles: 380, deployed: 3900, utilization: 93 },

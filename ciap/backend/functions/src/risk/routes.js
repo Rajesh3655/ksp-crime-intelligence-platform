@@ -1,103 +1,92 @@
 /**
  * Risk Analysis Routes
- * GET /api/risk                 — District risk scores
- * GET /api/risk/:districtId     — Single district detail
- * POST /api/risk/compute        — Trigger risk computation
+ * Risk scores are derived intelligence findings over the official FIR ERD.
  */
 
 'use strict';
 
-const express  = require('express');
+const express = require('express');
 const catalyst = require('catalyst-sdk');
 const { asyncHandler, sendSuccess } = require('../middleware/errors');
-const { requireRole }               = require('../middleware/auth');
+const { requireRole } = require('../middleware/auth');
 
 const router = express.Router();
 
-// ── GET /api/risk ─────────────────────────────────────────────────────────────
-router.get('/', asyncHandler(async (req, res) => {
+const levelFromSeverity = severity => ({
+  red: 'critical',
+  orange: 'high',
+  yellow: 'medium',
+  green: 'low',
+}[severity] || 'medium');
+
+const normalizeRiskFinding = row => {
+  const finding = row.IntelligenceFinding || row;
+  const district = row.District || {};
+  const explanation = typeof finding.Explanation === 'string'
+    ? JSON.parse(finding.Explanation || '{}')
+    : finding.Explanation || {};
+
+  return {
+    districtId: finding.DistrictID,
+    districtName: district.DistrictName || row.district_name,
+    lat: parseFloat(district.latitude || 14.5),
+    lng: parseFloat(district.longitude || 75.7),
+    overallScore: explanation.overallScore || Math.round(Number(finding.ConfidencePct || 0)),
+    riskLevel: levelFromSeverity(finding.Severity),
+    trend: explanation.trend || 'stable',
+    factors: {
+      crimeRate: explanation.crimeRateScore || 0,
+      recidivism: explanation.recidivismScore || 0,
+      socioeconomic: explanation.socioeconomicScore || 0,
+      infrastructure: explanation.infrastructureScore || 0,
+    },
+    computedAt: finding.CreatedAt,
+  };
+};
+
+router.get('/', asyncHandler(async (_req, res) => {
   try {
     const datastore = catalyst.datastore();
-    const result = await datastore.table('RiskScore').query(
-      `SELECT rs.*, d.name_en AS district_name, d.hq_lat AS lat, d.hq_lng AS lng
-       FROM RiskScore rs
-       LEFT JOIN District d ON rs.district_id = d.district_id
-       WHERE rs.computed_at = (
-         SELECT MAX(rs2.computed_at) FROM RiskScore rs2
-         WHERE rs2.district_id = rs.district_id
-       )
-       ORDER BY rs.overall_score DESC`
+    const result = await datastore.table('IntelligenceFinding').query(
+      `SELECT f.*, d.DistrictName AS district_name
+       FROM IntelligenceFinding f
+       LEFT JOIN District d ON f.DistrictID = d.DistrictID
+       WHERE f.FindingType = 'risk'
+       ORDER BY f.CreatedAt DESC`
     );
 
-    sendSuccess(res, result.map(r => ({
-      districtId:          r.RiskScore.district_id,
-      districtName:        r.District?.name_en,
-      lat:                 parseFloat(r.District?.lat || 14.5),
-      lng:                 parseFloat(r.District?.lng || 75.7),
-      overallScore:        r.RiskScore.overall_score,
-      riskLevel:           r.RiskScore.risk_level,
-      trend:               r.RiskScore.trend,
-      factors: {
-        crimeRate:         r.RiskScore.crime_rate_score,
-        recidivism:        r.RiskScore.recidivism_score,
-        socioeconomic:     r.RiskScore.socioeconomic_score,
-        infrastructure:    r.RiskScore.infrastructure_score,
-      },
-      computedAt: r.RiskScore.computed_at,
-    })));
+    sendSuccess(res, result.map(normalizeRiskFinding));
   } catch {
-    // Mock fallback
     sendSuccess(res, getMockRiskScores(), { mock: true });
   }
 }));
 
-// ── GET /api/risk/:districtId ─────────────────────────────────────────────────
 router.get('/:districtId', asyncHandler(async (req, res) => {
-  const districtId = parseInt(req.params.districtId);
-  const datastore  = catalyst.datastore();
+  const districtId = parseInt(req.params.districtId, 10);
+  const datastore = catalyst.datastore();
 
-  const [current, history] = await Promise.all([
-    datastore.table('RiskScore').query(
-      `SELECT rs.*, d.name_en AS district_name
-       FROM RiskScore rs
-       LEFT JOIN District d ON rs.district_id = d.district_id
-       WHERE rs.district_id = ${districtId}
-       ORDER BY rs.computed_at DESC LIMIT 1`
-    ).catch(() => []),
-    datastore.table('RiskScore').query(
-      `SELECT overall_score, risk_level, computed_at FROM RiskScore
-       WHERE district_id = ${districtId}
-       ORDER BY computed_at DESC LIMIT 30`
-    ).catch(() => []),
-  ]);
+  const rows = await datastore.table('IntelligenceFinding').query(
+    `SELECT f.*, d.DistrictName AS district_name
+     FROM IntelligenceFinding f
+     LEFT JOIN District d ON f.DistrictID = d.DistrictID
+     WHERE f.FindingType = 'risk' AND f.DistrictID = ${districtId}
+     ORDER BY f.CreatedAt DESC LIMIT 30`
+  ).catch(() => []);
 
-  if (!current?.length) return res.status(404).json({ success: false, error: 'District risk data not found' });
+  if (!rows.length) return res.status(404).json({ success: false, error: 'District risk data not found' });
 
-  const r = current[0];
+  const current = normalizeRiskFinding(rows[0]);
   sendSuccess(res, {
     districtId,
-    districtName:  r.District?.name_en,
-    current: {
-      overallScore:   r.RiskScore.overall_score,
-      riskLevel:      r.RiskScore.risk_level,
-      trend:          r.RiskScore.trend,
-      factors: {
-        crimeRate:    r.RiskScore.crime_rate_score,
-        recidivism:   r.RiskScore.recidivism_score,
-        socioeconomic:r.RiskScore.socioeconomic_score,
-        infrastructure:r.RiskScore.infrastructure_score,
-      },
-      computedAt: r.RiskScore.computed_at,
-    },
-    history: history.map(h => ({
-      score:      h.RiskScore.overall_score,
-      level:      h.RiskScore.risk_level,
-      computedAt: h.RiskScore.computed_at,
-    })),
+    districtName: current.districtName,
+    current,
+    history: rows.map(row => {
+      const risk = normalizeRiskFinding(row);
+      return { score: risk.overallScore, level: risk.riskLevel, computedAt: risk.computedAt };
+    }),
   });
 }));
 
-// ── POST /api/risk/compute ────────────────────────────────────────────────────
 router.post('/compute', requireRole('scrb_analyst'), asyncHandler(async (req, res) => {
   const { districtIds } = req.body;
 
@@ -106,7 +95,7 @@ router.post('/compute', requireRole('scrb_analyst'), asyncHandler(async (req, re
     await signals.publish('RISK_COMPUTATION_REQUESTED', {
       districtIds: districtIds || 'all',
       requestedBy: req.user.userId,
-      timestamp:   new Date().toISOString(),
+      timestamp: new Date().toISOString(),
     });
     sendSuccess(res, { message: 'Risk computation queued', estimatedTime: '2-5 minutes' }, {}, 202);
   } catch (e) {
@@ -115,16 +104,12 @@ router.post('/compute', requireRole('scrb_analyst'), asyncHandler(async (req, re
   }
 }));
 
-// ── Mock data ─────────────────────────────────────────────────────────────────
 const getMockRiskScores = () => [
-  { districtId: 1, districtName: 'Bengaluru Urban', lat: 12.9716, lng: 77.5946, overallScore: 72, riskLevel: 'critical', trend: 'up',   factors: { crimeRate: 88, recidivism: 62, socioeconomic: 71, infrastructure: 45 } },
-  { districtId: 2, districtName: 'Kalaburagi',      lat: 17.3297, lng: 76.8343, overallScore: 67, riskLevel: 'critical', trend: 'up',   factors: { crimeRate: 74, recidivism: 68, socioeconomic: 82, infrastructure: 60 } },
-  { districtId: 3, districtName: 'Vijayapura',      lat: 16.8302, lng: 75.7100, overallScore: 63, riskLevel: 'high',     trend: 'stable',factors: { crimeRate: 70, recidivism: 55, socioeconomic: 75, infrastructure: 55 } },
-  { districtId: 4, districtName: 'Belagavi',        lat: 15.8497, lng: 74.4977, overallScore: 61, riskLevel: 'high',     trend: 'down', factors: { crimeRate: 68, recidivism: 50, socioeconomic: 70, infrastructure: 52 } },
-  { districtId: 5, districtName: 'Mysuru',          lat: 12.2958, lng: 76.6394, overallScore: 48, riskLevel: 'medium',   trend: 'down', factors: { crimeRate: 52, recidivism: 40, socioeconomic: 55, infrastructure: 42 } },
-  { districtId: 6, districtName: 'Hubballi-Dharwad',lat: 15.3647, lng: 75.1240, overallScore: 44, riskLevel: 'medium',   trend: 'stable',factors: { crimeRate: 48, recidivism: 38, socioeconomic: 50, infrastructure: 38 } },
-  { districtId: 7, districtName: 'Mangaluru',       lat: 12.8698, lng: 74.8426, overallScore: 38, riskLevel: 'low',      trend: 'down', factors: { crimeRate: 42, recidivism: 30, socioeconomic: 40, infrastructure: 35 } },
-  { districtId: 8, districtName: 'Shivamogga',      lat: 13.9299, lng: 75.5681, overallScore: 35, riskLevel: 'low',      trend: 'stable',factors: { crimeRate: 38, recidivism: 28, socioeconomic: 38, infrastructure: 30 } },
+  { districtId: 1, districtName: 'Bengaluru Urban', lat: 12.9716, lng: 77.5946, overallScore: 72, riskLevel: 'critical', trend: 'up', factors: { crimeRate: 88, recidivism: 62, socioeconomic: 71, infrastructure: 45 } },
+  { districtId: 2, districtName: 'Kalaburagi', lat: 17.3297, lng: 76.8343, overallScore: 67, riskLevel: 'critical', trend: 'up', factors: { crimeRate: 74, recidivism: 68, socioeconomic: 82, infrastructure: 60 } },
+  { districtId: 3, districtName: 'Vijayapura', lat: 16.8302, lng: 75.7100, overallScore: 63, riskLevel: 'high', trend: 'stable', factors: { crimeRate: 70, recidivism: 55, socioeconomic: 75, infrastructure: 55 } },
+  { districtId: 4, districtName: 'Belagavi', lat: 15.8497, lng: 74.4977, overallScore: 61, riskLevel: 'high', trend: 'down', factors: { crimeRate: 68, recidivism: 50, socioeconomic: 70, infrastructure: 52 } },
+  { districtId: 5, districtName: 'Mysuru', lat: 12.2958, lng: 76.6394, overallScore: 48, riskLevel: 'medium', trend: 'down', factors: { crimeRate: 52, recidivism: 40, socioeconomic: 55, infrastructure: 42 } },
 ];
 
 module.exports = router;

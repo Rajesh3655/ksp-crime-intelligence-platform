@@ -1,11 +1,11 @@
 import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
-  ResponsiveContainer, LineChart, Line, AreaChart, Area,
-  XAxis, YAxis, CartesianGrid, Tooltip, ReferenceLine, ReferenceArea, Legend,
+  ResponsiveContainer, AreaChart, Area,
+  XAxis, YAxis, CartesianGrid, Tooltip,
   BarChart, Bar,
 } from 'recharts';
-import { TrendingUp, RefreshCw, Info, Download, Brain, AlertTriangle } from 'lucide-react';
+import { Info, Download, Brain } from 'lucide-react';
 import { FORECAST_7DAY, FORECAST_30DAY, DISTRICTS } from '../../data/mockData';
 
 const TOOLTIP_STYLE = {

@@ -1,0 +1,9 @@
+{
+  "command": "uvicorn app:app --host 0.0.0.0 --port ${PORT:-8080}",
+  "runtime": "python3.11",
+  "health_check": {
+    "path": "/health",
+    "interval": 30,
+    "timeout": 5
+  }
+}

@@ -1,6 +1,9 @@
 import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Bot, Send, Mic, Sparkles, RotateCcw, X, BookOpen, Zap, BarChart3, Map, TrendingUp } from 'lucide-react';
+import { Send, Mic, Volume2, Sparkles, RotateCcw, BookOpen, BarChart3, Map, TrendingUp, Network } from 'lucide-react';
+import { motion } from 'framer-motion';
+import { askCopilot } from '../../data/intelligence';
+import { ExplainableAICard } from '../../components/intelligence/EnterprisePanels';
 
 const EXAMPLES = [
   'What districts have the highest crime rates this month?',
@@ -8,15 +11,14 @@ const EXAMPLES = [
   'Show me robbery trends in Bengaluru Urban',
   'Generate an intelligence brief for Kalaburagi district',
   'Which stations are understaffed based on crime density?',
+  'Find similar FIRs.',
+  'Show top gangs.',
+  'Who is connected to A1?',
   'ಬೆಂಗಳೂರಿನಲ್ಲಿ ಅಧಿಕ ಅಪಾಯದ ಪ್ರದೇಶಗಳನ್ನು ತೋರಿಸಿ',
   'ಇಂದಿನ ಮುನ್ಸೂಚನೆ ಏನು?',
 ];
 
 interface Message { id: string; role: 'user' | 'assistant'; text: string; }
-
-const AI_RESPONSES: Record<string, string> = {
-  default: "I'm your **KSP Intelligence Copilot** powered by Catalyst QuickML. I can help you analyse crime data, explain forecasts, generate reports, and assist with investigations. What would you like to know?",
-};
 
 const AICopilotPage: React.FC = () => {
   const { t } = useTranslation();
@@ -26,21 +28,16 @@ const AICopilotPage: React.FC = () => {
   const [input, setInput] = useState('');
   const [typing, setTyping] = useState(false);
 
-  const sendMessage = (text: string) => {
+  const sendMessage = async (text: string) => {
     if (!text.trim()) return;
     setMessages(prev => [...prev, { id: Date.now().toString(), role: 'user', text }]);
     setInput('');
     setTyping(true);
+    const response = await askCopilot(text, t('platform_name') === 'ಸಿಐಎಪಿ' ? 'kn' : 'en');
     setTimeout(() => {
-      const response = text.toLowerCase().includes('ಬೆಂಗಳೂರ')
-        ? '📍 **ಬೆಂಗಳೂರು ಅಧಿಕ ಅಪಾಯದ ಪ್ರದೇಶಗಳು**: ವ್ಹೈಟ್‌ಫೀಲ್ಡ್ (ಅಪಾಯ: 78), ಕೆಆರ್ ಪುರ (74), ಮಾರ್ತ್ಹಳ್ಳಿ (71), ಯಶವಂತಪುರ (68). ತಕ್ಷಣದ ನಿಯಂತ್ರಕ ಗಸ್ತು ಶಿಫಾರಸು ಮಾಡಲಾಗಿದೆ.'
-        : text.toLowerCase().includes('ಮುನ್ಸೂಚನ')
-        ? '📊 **ಇಂದಿನ ಮುನ್ಸೂಚನೆ**: ರಾಜ್ಯಾದ್ಯಂತ 165-195 ಘಟನೆಗಳು (ವಿಶ್ವಾಸ: 87%). ಕಳ್ಳತನ ಸ್ಥಿರ. ದರೋಡೆ 12% ಹೆಚ್ಚಳ. ಕಲಬುರಗಿಯಲ್ಲಿ ಮಾದಕ ದ್ರವ್ಯ ಅಪರಾಧ ಹೆಚ್ಚಳ.'
-        : `I've analysed your query about: **"${text}"**\n\nBased on current CIAP data, here's what I found:\n\n• **Bengaluru Urban**: Highest crime concentration (1,247 MTD), risk score 72/100\n• **Kalaburagi**: Organised crime signals detected, risk 67/100\n• **State trend**: 183 incidents today (+12% from yesterday)\n\nWould you like a detailed breakdown, forecast explanation, or should I generate a report for this analysis?`;
-
-      setMessages(prev => [...prev, { id: (Date.now() + 1).toString(), role: 'assistant', text: response }]);
+      setMessages(prev => [...prev, { id: (Date.now() + 1).toString(), role: 'assistant', text: String(response) }]);
       setTyping(false);
-    }, 1100);
+    }, 300);
   };
 
   return (
@@ -69,14 +66,33 @@ const AICopilotPage: React.FC = () => {
           { icon: <Map size={18} />, label: 'Geo Analysis', desc: 'Hotspot identification' },
           { icon: <BookOpen size={18} />, label: 'Report Generation', desc: 'Auto-generate reports' },
         ].map(cap => (
-          <div key={cap.label} className="card card-sm" style={{ display: 'flex', gap: 10, alignItems: 'flex-start' }}>
+          <motion.div key={cap.label} className="card card-sm" style={{ display: 'flex', gap: 10, alignItems: 'flex-start' }} whileHover={{ y: -2 }}>
             <div style={{ color: 'var(--accent-primary)', flexShrink: 0, marginTop: 2 }}>{cap.icon}</div>
             <div>
               <div className="text-sm" style={{ fontWeight: 600 }}>{cap.label}</div>
               <div className="text-caption text-muted">{cap.desc}</div>
             </div>
-          </div>
+          </motion.div>
         ))}
+      </div>
+
+      <div className="grid grid-2 mb-6">
+        <ExplainableAICard
+          title="Context Memory"
+          prediction="Conversation is scoped to current page, selected district, and FIR context"
+          confidence={92}
+          features={['Natural language intents', 'English/Kannada support', 'Citations to CaseMaster and IntelligenceFinding']}
+          recommendation="Ask for charts, maps, graphs, predictions, or SCRB report generation in one prompt."
+        />
+        <div className="intel-card">
+          <div className="intel-card-header">
+            <div className="intel-title"><Network size={15} /> Interactive Response Types</div>
+            <button className="btn btn-ghost btn-sm"><Volume2 size={13} /> Voice</button>
+          </div>
+          {['Inline chart', 'Map overlay', 'Graph focus', 'Prediction card', 'Citation drawer'].map(item => (
+            <div key={item} className="intel-row"><Sparkles size={12} /> {item}</div>
+          ))}
+        </div>
       </div>
 
       {/* Chat Area */}
@@ -88,8 +104,10 @@ const AICopilotPage: React.FC = () => {
               {msg.role === 'assistant' && (
                 <div className="ai-avatar" style={{ flexShrink: 0, marginTop: 2 }}><Sparkles size={14} /></div>
               )}
-              <div
+              <motion.div
                 className="ai-message-bubble"
+                initial={{ opacity: 0, y: 6 }}
+                animate={{ opacity: 1, y: 0 }}
                 style={{
                   maxWidth: '80%',
                   background: msg.role === 'user' ? 'var(--info-bg)' : 'var(--navy-800)',
@@ -122,7 +140,7 @@ const AICopilotPage: React.FC = () => {
         <div style={{ padding: '0 var(--space-6) var(--space-3)', borderTop: '1px solid var(--border-subtle)', paddingTop: 'var(--space-3)' }}>
           <div className="text-label text-muted mb-2">Suggested queries</div>
           <div className="flex wrap gap-2">
-            {EXAMPLES.slice(0, 4).map(e => (
+            {EXAMPLES.slice(0, 8).map(e => (
               <button key={e} className="ai-chip" onClick={() => sendMessage(e)} style={{ fontSize: 11 }}>
                 {e.length > 48 ? e.slice(0, 47) + '…' : e}
               </button>

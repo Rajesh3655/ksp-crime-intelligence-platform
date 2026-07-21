@@ -28,7 +28,7 @@ const createUserSchema = Joi.object({
 
 // ── GET /api/admin/users ──────────────────────────────────────────────────────
 router.get('/users', requireRole('district_officer'), asyncHandler(async (req, res) => {
-  const { page, perPage, offset } = paginate(req.query);
+  const { perPage, offset } = paginate(req.query);
   const { role, districtId, status } = req.query;
 
   let where = ['1=1'];
@@ -141,7 +141,7 @@ router.put('/users/:id', requireRole('super_admin'), asyncHandler(async (req, re
 
 // ── GET /api/admin/audit ──────────────────────────────────────────────────────
 router.get('/audit', requireRole('super_admin'), asyncHandler(async (req, res) => {
-  const { page, perPage, offset } = paginate(req.query);
+  const { perPage, offset } = paginate(req.query);
   const { userId, action, dateFrom } = req.query;
 
   let where = ['1=1'];

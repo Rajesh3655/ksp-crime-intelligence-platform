@@ -8,7 +8,6 @@
 'use strict';
 
 const express  = require('express');
-const Joi      = require('joi');
 const catalyst = require('catalyst-sdk');
 
 const { asyncHandler, sendSuccess } = require('../middleware/errors');
@@ -24,32 +23,32 @@ router.get('/', asyncHandler(async (req, res) => {
   try {
     const datastore = catalyst.datastore();
 
-    let where = `WHERE f.forecast_start >= CURDATE() ORDER BY f.forecast_start ASC LIMIT ${numDays}`;
-    if (districtId) where = `WHERE f.district_id = ${parseInt(districtId)} AND f.forecast_start >= CURDATE() ORDER BY f.forecast_start ASC LIMIT ${numDays}`;
+    let where = `WHERE f.FindingType = 'forecast' ORDER BY f.CreatedAt DESC LIMIT ${numDays}`;
+    if (districtId) where = `WHERE f.FindingType = 'forecast' AND f.DistrictID = ${parseInt(districtId)} ORDER BY f.CreatedAt DESC LIMIT ${numDays}`;
 
-    const result = await datastore.table('Forecast').query(
-      `SELECT f.*, d.name_en AS district_name
-       FROM Forecast f
-       LEFT JOIN District d ON f.district_id = d.district_id
+    const result = await datastore.table('IntelligenceFinding').query(
+      `SELECT f.*, d.DistrictName AS district_name
+       FROM IntelligenceFinding f
+       LEFT JOIN District d ON f.DistrictID = d.DistrictID
        ${where}`
     );
 
     sendSuccess(res, result.map(r => ({
-      forecastId:   r.Forecast.forecast_id,
-      districtId:   r.Forecast.district_id,
-      districtName: r.District?.name_en,
-      crimeType:    r.Forecast.crime_type,
-      date:         r.Forecast.forecast_start,
-      predicted:    r.Forecast.predicted_count,
-      lower:        r.Forecast.lower_bound,
-      upper:        r.Forecast.upper_bound,
-      confidence:   parseFloat(r.Forecast.confidence_pct),
-      model:        r.Forecast.model_name,
-      explanation:  r.Forecast.explanation ? JSON.parse(r.Forecast.explanation) : null,
-      generatedAt:  r.Forecast.generated_at,
+      forecastId:   r.IntelligenceFinding.FindingID,
+      districtId:   r.IntelligenceFinding.DistrictID,
+      districtName: r.District?.DistrictName || r.district_name,
+      crimeType:    r.IntelligenceFinding.Explanation?.crimeHead || 'all',
+      date:         r.IntelligenceFinding.CreatedAt,
+      predicted:    r.IntelligenceFinding.Explanation?.predictedCount,
+      lower:        r.IntelligenceFinding.Explanation?.lowerBound,
+      upper:        r.IntelligenceFinding.Explanation?.upperBound,
+      confidence:   parseFloat(r.IntelligenceFinding.ConfidencePct),
+      model:        r.IntelligenceFinding.Explanation?.model || 'Catalyst Zia AutoML',
+      explanation:  r.IntelligenceFinding.Explanation,
+      generatedAt:  r.IntelligenceFinding.CreatedAt,
     })));
 
-  } catch (err) {
+  } catch {
     // Mock forecast data for dev/demo
     const mockData = generateMockForecast(numDays, parseInt(districtId) || null, crimeType || null);
     sendSuccess(res, mockData, { mock: true });
@@ -67,22 +66,24 @@ router.post('/generate', requireRole('scrb_analyst'), asyncHandler(async (req, r
     // Fetch historical data for training context
     const datastore   = catalyst.datastore();
     const historicalQuery = `
-      SELECT DATE(incident_date) AS date,
-             crime_type,
+      SELECT DATE(cm.CrimeRegisteredDate) AS date,
+             ch.CrimeGroupName AS crime_type,
              COUNT(*) AS count
-      FROM FIR
-      WHERE incident_date >= DATE_SUB(CURDATE(), INTERVAL 90 DAY)
-      ${districtId ? `AND district_id = ${parseInt(districtId)}` : ''}
-      ${crimeType  ? `AND crime_type = '${crimeType}'` : ''}
-      GROUP BY DATE(incident_date), crime_type
+      FROM CaseMaster cm
+      LEFT JOIN Unit u ON cm.PoliceStationID = u.UnitID
+      LEFT JOIN CrimeHead ch ON cm.CrimeMajorHeadID = ch.CrimeHeadID
+      WHERE cm.CrimeRegisteredDate >= DATE_SUB(CURDATE(), INTERVAL 90 DAY)
+      ${districtId ? `AND u.DistrictID = ${parseInt(districtId)}` : ''}
+      ${crimeType  ? `AND ch.CrimeGroupName = '${String(crimeType).replace(/'/g, "''")}'` : ''}
+      GROUP BY DATE(cm.CrimeRegisteredDate), ch.CrimeGroupName
       ORDER BY date ASC
     `;
 
-    const historical = await datastore.table('FIR').query(historicalQuery);
+    const historical = await datastore.table('CaseMaster').query(historicalQuery);
     const trainingData = historical.map(r => ({
-      date:      r.FIR.date,
-      crimeType: r.FIR.crime_type,
-      count:     r.FIR.count,
+      date:      r.date,
+      crimeType: r.crime_type,
+      count:     r.count,
     }));
 
     // Call Zia AutoML
@@ -97,19 +98,22 @@ router.post('/generate', requireRole('scrb_analyst'), asyncHandler(async (req, r
     // Save forecasts to DataStore
     const forecasts = prediction.results || [];
     for (const fc of forecasts) {
-      await datastore.table('Forecast').insertRow({
-        district_id:     districtId ? parseInt(districtId) : null,
-        crime_type:      crimeType || 'all',
-        forecast_start:  fc.date,
-        forecast_end:    fc.date,
-        predicted_count: Math.round(fc.predicted),
-        lower_bound:     Math.round(fc.lower || fc.predicted * 0.85),
-        upper_bound:     Math.round(fc.upper || fc.predicted * 1.15),
-        confidence_pct:  fc.confidence || 85.0,
-        model_name:      'Zia AutoML LSTM',
-        model_version:   prediction.model_version,
-        model_accuracy:  prediction.accuracy_score,
-        explanation:     JSON.stringify(prediction.feature_importance || {}),
+      await datastore.table('IntelligenceFinding').insertRow({
+        DistrictID: districtId ? parseInt(districtId) : null,
+        FindingType: 'forecast',
+        Severity: 'yellow',
+        ConfidencePct: fc.confidence || 85.0,
+        Summary: `Forecast ${Math.round(fc.predicted)} incidents for ${fc.date}`,
+        Explanation: {
+          crimeHead: crimeType || 'all',
+          forecastDate: fc.date,
+          predictedCount: Math.round(fc.predicted),
+          lowerBound: Math.round(fc.lower || fc.predicted * 0.85),
+          upperBound: Math.round(fc.upper || fc.predicted * 1.15),
+          model: 'Catalyst Zia AutoML',
+          modelVersion: prediction.model_version,
+          featureImportance: prediction.feature_importance || {},
+        },
       });
     }
 
@@ -140,21 +144,21 @@ router.post('/generate', requireRole('scrb_analyst'), asyncHandler(async (req, r
 // ── GET /api/forecast/history ─────────────────────────────────────────────────
 router.get('/history', asyncHandler(async (req, res) => {
   const datastore = catalyst.datastore();
-  const result = await datastore.table('Forecast').query(
-    `SELECT DATE(f.forecast_start) AS month,
-            AVG(f.confidence_pct) AS avg_confidence,
-            AVG(f.model_accuracy) AS avg_accuracy,
+  const result = await datastore.table('IntelligenceFinding').query(
+    `SELECT DATE(f.CreatedAt) AS month,
+            AVG(f.ConfidencePct) AS avg_confidence,
             COUNT(*) AS forecast_count
-     FROM Forecast f
-     WHERE f.forecast_start >= DATE_SUB(CURDATE(), INTERVAL 90 DAY)
-     GROUP BY DATE(f.forecast_start)
+     FROM IntelligenceFinding f
+     WHERE f.FindingType = 'forecast'
+     AND f.CreatedAt >= DATE_SUB(CURDATE(), INTERVAL 90 DAY)
+     GROUP BY DATE(f.CreatedAt)
      ORDER BY month ASC`
   ).catch(() => []);
 
   sendSuccess(res, result.map(r => ({
-    month:        r.month || r.Forecast?.forecast_start,
-    avgConfidence:parseFloat(r['AVG(f.confidence_pct)'] || 85),
-    avgAccuracy:  parseFloat(r['AVG(f.model_accuracy)'] || 84.7),
+    month:        r.month || r.IntelligenceFinding?.CreatedAt,
+    avgConfidence:parseFloat(r.avg_confidence || 85),
+    avgAccuracy:  parseFloat(r.avg_confidence || 84.7),
     forecastCount:parseInt(r['COUNT(*)'] || 1),
   })));
 }));

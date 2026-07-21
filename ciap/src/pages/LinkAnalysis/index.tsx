@@ -1,7 +1,12 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Search, Plus, User, Car, MapPin, Calendar, Filter, Minus, ZoomIn, ZoomOut } from 'lucide-react';
+import { Search, Plus, User, Car, MapPin, Calendar, Filter, ZoomIn, ZoomOut, GitBranch } from 'lucide-react';
+import { ReactFlow, Background, Controls, MiniMap } from '@xyflow/react';
+import type { Node, Edge } from '@xyflow/react';
+import '@xyflow/react/dist/style.css';
 import { LINK_NODES, LINK_EDGES } from '../../data/mockData';
+import { flowEdges, flowNodes } from '../../data/intelligence';
+import { ExplainableAICard } from '../../components/intelligence/EnterprisePanels';
 
 const NODE_COLORS: Record<string, { fill: string; stroke: string }> = {
   suspect:  { fill: '#1F0E0E', stroke: '#DC2626' },
@@ -26,9 +31,9 @@ const LinkAnalysis: React.FC = () => {
   const [zoom, setZoom] = useState(1);
   const [pan, setPan] = useState({ x: 0, y: 0 });
   const [dragging, setDragging] = useState(false);
-  const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
   const [nodes, setNodes] = useState(LINK_NODES.map(n => ({ ...n })));
   const [draggingNode, setDraggingNode] = useState<string | null>(null);
+  const [flowMode, setFlowMode] = useState(true);
 
   const entityCounts = {
     suspects: LINK_NODES.filter(n => n.type === 'suspect').length,
@@ -55,9 +60,8 @@ const LinkAnalysis: React.FC = () => {
     }
   };
 
-  const handleSvgMouseDown = (e: React.MouseEvent) => {
+  const handleSvgMouseDown = () => {
     setDragging(true);
-    setDragStart({ x: e.clientX, y: e.clientY });
   };
 
   const handleSvgMouseUp = () => {
@@ -130,6 +134,7 @@ const LinkAnalysis: React.FC = () => {
       <div style={{ flex: 1, position: 'relative', background: 'var(--navy-950)', overflow: 'hidden' }}>
         {/* Graph controls */}
         <div style={{ position: 'absolute', top: 12, right: 12, zIndex: 10, display: 'flex', gap: 4, flexDirection: 'column' }}>
+          <button className="btn btn-secondary btn-icon btn-sm" title="React Flow graph" onClick={() => setFlowMode(v => !v)}><GitBranch size={13} /></button>
           <button className="btn btn-secondary btn-icon btn-sm" onClick={() => setZoom(z => Math.min(z + 0.2, 3))}><ZoomIn size={13} /></button>
           <button className="btn btn-secondary btn-icon btn-sm" onClick={() => setZoom(z => Math.max(z - 0.2, 0.3))}><ZoomOut size={13} /></button>
           <button className="btn btn-secondary btn-icon btn-sm" onClick={() => { setZoom(1); setPan({ x: 0, y: 0 }); }}><Filter size={13} /></button>
@@ -146,6 +151,24 @@ const LinkAnalysis: React.FC = () => {
           <span className="text-label text-muted">{Math.round(zoom * 100)}%</span>
         </div>
 
+        {flowMode ? (
+          <ReactFlow
+            nodes={flowNodes as Node[]}
+            edges={flowEdges as Edge[]}
+            fitView
+            onNodeClick={(_: React.MouseEvent, node: Node) => {
+              const match = LINK_NODES.find(n => n.id === node.id);
+              if (match) setSelected(match as any);
+            }}
+            nodesDraggable
+            panOnDrag
+            zoomOnScroll
+          >
+            <Background color="rgba(148,163,184,0.15)" gap={22} />
+            <MiniMap nodeColor={node => String((node.data as any)?.risk) === 'critical' ? '#DC2626' : '#2563EB'} pannable zoomable />
+            <Controls />
+          </ReactFlow>
+        ) : (
         <svg
           ref={svgRef}
           width="100%"
@@ -218,6 +241,7 @@ const LinkAnalysis: React.FC = () => {
             })}
           </g>
         </svg>
+        )}
       </div>
 
       {/* Right Panel — Entity Details */}
@@ -295,6 +319,16 @@ const LinkAnalysis: React.FC = () => {
                   </div>
                 </div>
               ))}
+            </div>
+
+            <div style={{ marginTop: 16 }}>
+              <ExplainableAICard
+                title="Graph AI Explanation"
+                prediction="Likely organized cluster"
+                confidence={88}
+                features={['High centrality accused node', 'Same MO edge present', 'Shared station and location signals']}
+                recommendation="Expand two-hop neighbors and filter by MO cluster before field verification."
+              />
             </div>
           </div>
           <div style={{ padding: 'var(--space-3) var(--space-4)', borderTop: '1px solid var(--border-subtle)', display: 'flex', gap: 8 }}>

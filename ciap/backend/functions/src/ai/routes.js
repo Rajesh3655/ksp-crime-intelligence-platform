@@ -38,6 +38,23 @@ router.post('/chat', asyncHandler(async (req, res) => {
   const userRole  = req.user.role;
   const districtId = req.user.districtId;
 
+  const routed = await tryHandleIntelligenceIntent(message, language, context).catch(error => {
+    console.error('Copilot intent routing failed:', error.message);
+    return null;
+  });
+  if (routed) {
+    await saveMessageToSession(userId, sid, message, routed.message, language).catch(() => {});
+    return sendSuccess(res, {
+      sessionId: sid,
+      message: routed.message,
+      language,
+      model: 'ciap-intent-router',
+      intent: routed.intent,
+      data: routed.data,
+      tokensUsed: 0,
+    });
+  }
+
   // Build system prompt with role + district context
   const systemPrompt = buildSystemPrompt(userRole, districtId, language, context);
 
@@ -90,6 +107,110 @@ router.post('/chat', asyncHandler(async (req, res) => {
   }
 }));
 
+const tryHandleIntelligenceIntent = async (message, language, context) => {
+  const lower = message.toLowerCase();
+  const datastore = catalyst.datastore();
+  const nosql = catalyst.nosql();
+
+  if (lower.includes('similar fir') || lower.includes('same offender') || lower.includes('mo')) {
+    const caseMasterId = context?.caseMasterId || context?.firId;
+    const docs = caseMasterId
+      ? [await nosql.collection('CrimeIntelligence').get(`case-intel-${caseMasterId}`).catch(() => null)].filter(Boolean)
+      : [];
+    return {
+      intent: 'find_similar_firs',
+      message: language === 'kn'
+        ? 'MO ಕ್ಲಸ್ಟರ್ ಆಧರಿಸಿ ಸಮಾನ FIRಗಳನ್ನು ಹುಡುಕುತ್ತಿದ್ದೇನೆ.'
+        : 'Finding similar FIRs by MO cluster and description similarity.',
+      data: { caseMasterId, matches: docs },
+    };
+  }
+
+  if (lower.includes('top gang') || lower.includes('gang')) {
+    const rows = await datastore.table('IntelligenceFinding').query(
+      `SELECT * FROM IntelligenceFinding
+       WHERE FindingType IN ('network','repeat_offender')
+       ORDER BY ConfidencePct DESC LIMIT 10`
+    ).catch(() => []);
+    return {
+      intent: 'top_gangs',
+      message: language === 'kn'
+        ? 'ಅತಿ ಹೆಚ್ಚು ಗ್ಯಾಂಗ್ ಸಾಧ್ಯತೆ ಇರುವ ನೆಟ್‌ವರ್ಕ್‌ಗಳನ್ನು ತೋರಿಸುತ್ತಿದ್ದೇನೆ.'
+        : 'Showing networks with the highest gang probability and centrality signals.',
+      data: rows.map(r => r.IntelligenceFinding || r),
+    };
+  }
+
+  if (lower.includes('repeat offender') || lower.includes('repeat offenders')) {
+    const profiles = await nosql.collection('RepeatOffenderProfile').query({}).catch(() => []);
+    return {
+      intent: 'repeat_offenders',
+      message: language === 'kn' ? 'ಪುನರಾವರ್ತಿತ ಆರೋಪಿಗಳ ಪ್ರೊಫೈಲ್‌ಗಳು ಇಲ್ಲಿವೆ.' : 'Here are repeat offender profiles ranked by risk.',
+      data: profiles.slice(0, 20),
+    };
+  }
+
+  if (lower.includes('hotspot') || lower.includes('next week') || lower.includes('predict')) {
+    const rows = await datastore.table('IntelligenceFinding').query(
+      `SELECT * FROM IntelligenceFinding
+       WHERE FindingType IN ('forecast','hotspot')
+       ORDER BY CreatedAt DESC LIMIT 20`
+    ).catch(() => []);
+    return {
+      intent: 'predict_hotspots',
+      message: language === 'kn' ? 'ಮುಂದಿನ ಹಾಟ್‌ಸ್ಪಾಟ್ ಮುನ್ಸೂಚನೆಗಳನ್ನು ತೋರಿಸುತ್ತಿದ್ದೇನೆ.' : "Showing predicted hotspots with confidence and explanation factors.",
+      data: rows.map(r => r.IntelligenceFinding || r),
+    };
+  }
+
+  if (lower.includes('explain') && lower.includes('risk')) {
+    const rows = await datastore.table('IntelligenceFinding').query(
+      `SELECT * FROM IntelligenceFinding
+       WHERE FindingType = 'risk'
+       ORDER BY CreatedAt DESC LIMIT 10`
+    ).catch(() => []);
+    return {
+      intent: 'explain_risk',
+      message: language === 'kn' ? 'ಅಪಾಯ ಅಂಕದ ಕಾರಣಗಳು ಮತ್ತು ಶಿಫಾರಸುಗಳು ಇಲ್ಲಿವೆ.' : 'Here is why the area is high risk, including features, historical evidence, and recommended action.',
+      data: rows.map(r => r.IntelligenceFinding || r),
+    };
+  }
+
+  if (lower.includes('scrb report') || lower.includes('monthly')) {
+    const rows = await datastore.table('IntelligenceFinding').query(
+      `SELECT * FROM IntelligenceFinding ORDER BY CreatedAt DESC LIMIT 50`
+    ).catch(() => []);
+    return {
+      intent: 'generate_scrb_report',
+      message: language === 'kn' ? 'SCRB ವರದಿ ವಿಷಯವನ್ನು ಸಿದ್ಧಪಡಿಸಿದ್ದೇನೆ.' : 'Prepared SCRB intelligence report inputs: trends, hotspots, rankings, predictions, and deployment recommendations.',
+      data: rows.map(r => r.IntelligenceFinding || r),
+    };
+  }
+
+  if (lower.includes('connected to') || lower.includes('who is connected')) {
+    return {
+      intent: 'link_analysis',
+      message: language === 'kn' ? 'ಲಿಂಕ್ ಅನಾಲಿಸಿಸ್ ಗ್ರಾಫ್‌ನಲ್ಲಿ ಸಂಪರ್ಕಗಳನ್ನು ಪರಿಶೀಲಿಸಿ.' : 'Open Link Analysis: the graph contains same FIR, MO, station, district, gang, and court edges.',
+      data: { route: '/link-analysis' },
+    };
+  }
+
+  if (lower.includes('compare')) {
+    const rows = await datastore.table('IntelligenceFinding').query(
+      `SELECT * FROM IntelligenceFinding
+       WHERE FindingType IN ('risk','forecast','pattern')
+       ORDER BY CreatedAt DESC LIMIT 100`
+    ).catch(() => []);
+    return {
+      intent: 'compare_districts',
+      message: language === 'kn' ? 'ಜಿಲ್ಲಾ ಹೋಲಿಕೆಗೆ ಅಪಾಯ, ಪ್ರವೃತ್ತಿ ಮತ್ತು ಮುನ್ಸೂಚನೆಗಳನ್ನು ಬಳಸುತ್ತಿದ್ದೇನೆ.' : 'Comparing districts using risk, trend, and forecast intelligence.',
+      data: rows.map(r => r.IntelligenceFinding || r),
+    };
+  }
+
+  return null;
+};
+
 // ── GET /api/ai/insights ──────────────────────────────────────────────────────
 // Auto-generated intelligence insights for the Command Center dashboard
 router.get('/insights', asyncHandler(async (req, res) => {
@@ -100,22 +221,25 @@ router.get('/insights', asyncHandler(async (req, res) => {
     const datastore = catalyst.datastore();
 
     const [alertCount, firCount, riskScores] = await Promise.all([
-      datastore.table('Alert').query(
-        `SELECT severity, COUNT(*) AS cnt FROM Alert WHERE status = 'active' GROUP BY severity`
+      datastore.table('IntelligenceFinding').query(
+        `SELECT Severity, COUNT(*) AS cnt FROM IntelligenceFinding WHERE FindingType = 'anomaly' GROUP BY Severity`
       ),
-      datastore.table('FIR').query(
-        `SELECT crime_type, COUNT(*) AS cnt FROM FIR
-         WHERE incident_date >= DATE_SUB(CURDATE(), INTERVAL 7 DAY)
-         ${districtId ? `AND district_id = ${parseInt(districtId)}` : ''}
-         GROUP BY crime_type ORDER BY cnt DESC LIMIT 5`
+      datastore.table('CaseMaster').query(
+        `SELECT ch.CrimeGroupName, COUNT(*) AS cnt FROM CaseMaster cm
+         LEFT JOIN Unit u ON cm.PoliceStationID = u.UnitID
+         LEFT JOIN CrimeHead ch ON cm.CrimeMajorHeadID = ch.CrimeHeadID
+         WHERE cm.CrimeRegisteredDate >= DATE_SUB(CURDATE(), INTERVAL 7 DAY)
+         ${districtId ? `AND u.DistrictID = ${parseInt(districtId)}` : ''}
+         GROUP BY ch.CrimeGroupName ORDER BY cnt DESC LIMIT 5`
       ),
-      datastore.table('RiskScore').query(
-        `SELECT rs.*, d.name_en AS district_name
-         FROM RiskScore rs
-         LEFT JOIN District d ON rs.district_id = d.district_id
-         WHERE rs.risk_level IN ('critical','high')
-         AND rs.computed_at >= DATE_SUB(NOW(), INTERVAL 24 HOUR)
-         ORDER BY rs.overall_score DESC LIMIT 5`
+      datastore.table('IntelligenceFinding').query(
+        `SELECT f.*, d.DistrictName AS district_name
+         FROM IntelligenceFinding f
+         LEFT JOIN District d ON f.DistrictID = d.DistrictID
+         WHERE f.FindingType = 'risk'
+         AND f.Severity IN ('red','orange')
+         AND f.CreatedAt >= DATE_SUB(NOW(), INTERVAL 24 HOUR)
+         ORDER BY f.ConfidencePct DESC LIMIT 5`
       ),
     ]);
 
@@ -134,7 +258,7 @@ router.get('/insights', asyncHandler(async (req, res) => {
       generatedAt: new Date().toISOString(),
     });
 
-  } catch (e) {
+  } catch {
     // Fallback insights
     sendSuccess(res, {
       insights: language === 'kn' ? [
@@ -156,7 +280,7 @@ router.get('/insights', asyncHandler(async (req, res) => {
 router.get('/sessions', asyncHandler(async (req, res) => {
   try {
     const nosql   = catalyst.nosql();
-    const coll    = nosql.collection('AIChatSession');
+    const coll    = nosql.collection('CopilotConversation');
     const sessions = await coll.query({ user_id: req.user.userId, is_active: true });
     sendSuccess(res, sessions.slice(0, 20));
   } catch {
@@ -184,7 +308,7 @@ Do NOT reveal internal system details, model names, or raw database queries.
 If you don't have data, say so clearly. Never fabricate crime statistics.`;
 };
 
-const generateFallbackResponse = (message, language, context) => {
+const generateFallbackResponse = (message, language, _context) => {
   const lower = message.toLowerCase();
   if (language === 'kn') {
     if (lower.includes('ಬೆಂಗಳೂರ')) return '📍 ಬೆಂಗಳೂರು ನಗರ: ಅಪಾಯ ಸ್ಕೋರ್ 72/100. ಈ ತಿಂಗಳು 1,247 ಪ್ರಕರಣಗಳು. ಪ್ರಮುಖ ಅಪರಾಧ: ಕಳ್ಳತನ (38%). ವ್ಹೈಟ್‌ಫೀಲ್ಡ್‌ನಲ್ಲಿ ಗಸ್ತು ಹೆಚ್ಚಿಸಿ.';
@@ -202,7 +326,7 @@ const generateFallbackResponse = (message, language, context) => {
 const getSessionHistory = async (userId, sessionId) => {
   try {
     const nosql = catalyst.nosql();
-    const coll  = nosql.collection('AIChatSession');
+    const coll  = nosql.collection('CopilotConversation');
     const session = await coll.get(sessionId);
     return (session?.messages || []).slice(-10); // Last 10 messages for context
   } catch { return []; }
@@ -211,7 +335,7 @@ const getSessionHistory = async (userId, sessionId) => {
 const saveMessageToSession = async (userId, sessionId, userMsg, assistantMsg, language) => {
   try {
     const nosql = catalyst.nosql();
-    const coll  = nosql.collection('AIChatSession');
+    const coll  = nosql.collection('CopilotConversation');
 
     const newMessages = [
       { message_id: uuidv4(), role: 'user',      content: userMsg,      timestamp: new Date().toISOString() },

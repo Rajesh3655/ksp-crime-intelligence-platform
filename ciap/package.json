@@ -7,13 +7,17 @@
     "dev": "vite",
     "build": "tsc -b && vite build",
     "lint": "oxlint",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "demo:seed": "node scripts/generate-demo-dataset.mjs",
+    "qa": "node scripts/final-qa.mjs"
   },
   "dependencies": {
+    "@xyflow/react": "^12.11.2",
     "axios": "^1.18.1",
     "clsx": "^2.1.1",
     "d3": "^7.9.0",
     "date-fns": "^4.4.0",
+    "framer-motion": "^12.42.2",
     "i18next": "^26.3.1",
     "i18next-browser-languagedetector": "^8.2.1",
     "leaflet": "^1.9.4",

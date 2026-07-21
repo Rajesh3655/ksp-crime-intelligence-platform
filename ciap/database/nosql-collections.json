@@ -1,177 +1,170 @@
-// ============================================================
-// Investigation Graph Collections — Catalyst NoSQL
-// ============================================================
-
 {
   "collections": [
     {
+      "name": "EmbeddingStore",
+      "catalyst_service": "Catalyst NoSQL + Catalyst Cache",
+      "description": "Persisted semantic vectors for MO, BriefFacts, Acts, Sections, victim narratives, and officer notes. Used for ANN-style semantic retrieval without recomputing embeddings.",
+      "schema": {
+        "embedding_id": "string",
+        "case_master_id": "number",
+        "source_type": "enum: mo | brief_facts | act | section | victim_narrative | officer_note",
+        "source_hash": "string",
+        "vector": "array<number>",
+        "model_id": "string",
+        "model_version": "string",
+        "created_at": "ISO8601 datetime"
+      }
+    },
+    {
+      "name": "ModelArtifactManifest",
+      "catalyst_service": "Catalyst NoSQL + Catalyst Stratus",
+      "description": "Manifest of model artifacts stored in Stratus, including scalers, encoders, graph snapshots, embeddings, and metadata.",
+      "schema": {
+        "manifest_id": "string",
+        "model_id": "string",
+        "version": "string",
+        "artifact_paths": "object",
+        "metadata": "object",
+        "created_at": "ISO8601 datetime"
+      }
+    },
+    {
+      "name": "KnowledgeGraphSnapshot",
+      "catalyst_service": "Catalyst NoSQL + Catalyst Cache",
+      "description": "Time-versioned graph snapshots for gang evolution and association drift.",
+      "schema": {
+        "snapshot_id": "string",
+        "period": "enum: daily | weekly | monthly",
+        "nodes": "array",
+        "edges": "array",
+        "metrics": {
+          "new_gangs": "array",
+          "removed_gangs": "array",
+          "growing_gangs": "array",
+          "new_associations": "array",
+          "fragmentation": "array"
+        },
+        "created_at": "ISO8601 datetime"
+      }
+    },
+    {
+      "name": "CrimeIntelligence",
+      "catalyst_service": "Catalyst NoSQL + Catalyst QuickML + Catalyst Zia AutoML",
+      "description": "Per-FIR intelligence document containing risk, severity, repeat-offender, gang, MO, hotspot, prediction, anomaly, and confidence scores.",
+      "schema": {
+        "intelligence_id": "string",
+        "case_master_id": "number (CaseMaster.CaseMasterID)",
+        "crime_no": "string (CaseMaster.CrimeNo)",
+        "scores": {
+          "riskScore": "number 0-100",
+          "severityScore": "number 0-100",
+          "repeatOffenderScore": "number 0-100",
+          "gangProbability": "number 0-100",
+          "moCluster": "string",
+          "hotspotCluster": "string",
+          "predictionScore": "number 0-100",
+          "anomalyScore": "number 0-100",
+          "confidenceScore": "number 0-100"
+        },
+        "model_outputs": "object keyed by dbscan | isolationForest | xgboost | sentenceTransformers | networkx",
+        "explainable_ai": "object with prediction, why, importantFeatures, historicalCases, confidence, recommendedAction",
+        "created_at": "ISO8601 datetime"
+      }
+    },
+    {
       "name": "InvestigationGraph",
-      "description": "Network graph nodes and edges for link analysis",
+      "catalyst_service": "Catalyst NoSQL + Catalyst Cache",
+      "description": "Interactive link-analysis graph derived from CaseMaster, Accused, Victim, Unit, Employee, ActSectionAssociation, ArrestSurrender, and ChargesheetDetails.",
       "schema": {
         "graph_id": "string (UUID)",
-        "case_id": "string (FIR number)",
-        "title": "string",
-        "created_by": "number (user_id)",
-        "status": "enum: active | archived | shared",
-        "nodes": [
-          {
-            "node_id": "string",
-            "label": "string",
-            "type": "enum: suspect | victim | vehicle | location | event | organization | phone | bank_account",
-            "risk_level": "enum: critical | high | medium | low",
-            "attributes": "object (type-specific data)",
-            "position": { "x": "number", "y": "number" },
-            "created_at": "ISO8601 datetime"
-          }
-        ],
-        "edges": [
-          {
-            "edge_id": "string",
-            "source_node_id": "string",
-            "target_node_id": "string",
-            "relationship": "enum: associate | known_to | spotted_at | owner | witness | victim_in | suspect_in | sibling | spouse | employer | employee | accomplice | funded_by",
-            "strength": "number 0-1",
-            "evidence_ref": "string (evidence_id)",
-            "created_at": "ISO8601 datetime"
-          }
-        ],
-        "timeline_events": [
-          {
-            "event_id": "string",
-            "node_id": "string",
-            "description": "string",
-            "description_kn": "string",
-            "occurred_at": "ISO8601 datetime",
-            "source": "string"
-          }
-        ],
-        "created_at": "ISO8601 datetime",
+        "case_master_id": "number (CaseMaster.CaseMasterID)",
+        "crime_no": "string (CaseMaster.CrimeNo)",
+        "nodes": "array of Accused | Victim | Police | Location | Vehicle | Phone | Weapon | Case | Organization nodes",
+        "edges": "array of Family | Financial | Call | Vehicle | Same FIR | Same MO | Same Address | Same Gang edges",
+        "centrality_scores": "object",
+        "community_detection": "object",
+        "timeline_events": "array",
         "updated_at": "ISO8601 datetime"
       }
     },
-
     {
-      "name": "AIChatSession",
-      "description": "AI Copilot conversation sessions per user",
+      "name": "RepeatOffenderProfile",
+      "catalyst_service": "Catalyst NoSQL + Catalyst Cache",
+      "description": "Derived accused intelligence calculated from the official Accused table and related CaseMaster records.",
       "schema": {
-        "session_id": "string (UUID)",
-        "user_id": "number",
-        "language": "enum: en | kn",
-        "context_page": "string (current page path)",
-        "messages": [
-          {
-            "message_id": "string",
-            "role": "enum: user | assistant | system",
-            "content": "string",
-            "timestamp": "ISO8601 datetime",
-            "tokens_used": "number",
-            "model": "string"
-          }
-        ],
-        "created_at": "ISO8601 datetime",
-        "last_active_at": "ISO8601 datetime",
-        "is_active": "boolean"
+        "offender_id": "string",
+        "accused_name": "string",
+        "total_firs": "number",
+        "district_count": "number",
+        "police_station_count": "number",
+        "crime_types": "array",
+        "mo_similarity": "number 0-100",
+        "associates": "array",
+        "last_seen": "ISO8601 datetime",
+        "risk": "number 0-100",
+        "gang_score": "number 0-100",
+        "updated_at": "ISO8601 datetime"
       }
     },
-
     {
-      "name": "HotspotAnalysis",
-      "description": "ML-computed hotspot clusters for geo visualization",
+      "name": "GeoIntelligenceLayer",
+      "catalyst_service": "Catalyst NoSQL + Catalyst Cache",
+      "description": "Karnataka map overlays for heatmaps, hotspot clusters, risk overlays, replay frames, and deployment recommendations.",
       "schema": {
-        "analysis_id": "string (UUID)",
-        "computed_at": "ISO8601 datetime",
-        "valid_until": "ISO8601 datetime",
-        "crime_type": "string (or 'all')",
-        "time_range": {
-          "start": "ISO8601 date",
-          "end": "ISO8601 date"
-        },
-        "clusters": [
-          {
-            "cluster_id": "string",
-            "centroid": { "lat": "number", "lng": "number" },
-            "radius_km": "number",
-            "incident_count": "number",
-            "risk_level": "enum: critical | high | medium | low",
-            "dominant_crime_type": "string",
-            "confidence": "number 0-1",
-            "polygon_coords": "array of [lat, lng] pairs"
-          }
-        ],
+        "layer_id": "string (UUID)",
+        "layer_type": "enum: heatmap | hex_cluster | prediction | risk | deployment | digital_crime_twin",
+        "filters": "object",
+        "features": "GeoJSON FeatureCollection",
         "model": "string",
-        "algorithm": "enum: DBSCAN | KMeans | HDBSCAN"
+        "confidence_pct": "number",
+        "explanation": "object",
+        "valid_from": "ISO8601 datetime",
+        "valid_until": "ISO8601 datetime"
       }
     },
-
     {
-      "name": "AnomalyEvent",
-      "description": "Detected statistical anomalies that trigger alerts",
+      "name": "CopilotConversation",
+      "catalyst_service": "Catalyst QuickML",
+      "description": "English/Kannada AI copilot sessions with citations to FIR source records and generated findings.",
       "schema": {
-        "anomaly_id": "string (UUID)",
-        "detected_at": "ISO8601 datetime",
-        "district_id": "number",
-        "crime_type": "string",
-        "metric": "string (e.g. incident_count_hourly)",
-        "observed_value": "number",
-        "expected_value": "number",
-        "z_score": "number",
-        "sigma_threshold": "number",
-        "alert_triggered": "boolean",
-        "alert_id": "number (Alert table reference)",
-        "signal_id": "string (Catalyst Signal ID)",
-        "explanation": "string",
-        "status": "enum: new | processed | dismissed"
-      }
-    },
-
-    {
-      "name": "ResourceDeployment",
-      "description": "Real-time resource allocation and patrol tracking",
-      "schema": {
-        "deployment_id": "string (UUID)",
-        "district_id": "number",
-        "station_id": "number",
-        "deployment_date": "ISO8601 date",
-        "resources": {
-          "personnel_total": "number",
-          "personnel_deployed": "number",
-          "vehicles_total": "number",
-          "vehicles_deployed": "number",
-          "special_units": "array of strings"
-        },
-        "patrol_zones": [
-          {
-            "zone_id": "string",
-            "name": "string",
-            "officers_assigned": "number",
-            "vehicles_assigned": "number",
-            "risk_level": "enum: critical | high | medium | low",
-            "patrol_type": "enum: foot | mobile | static"
-          }
-        ],
-        "incidents_in_period": "number",
-        "utilization_pct": "number",
+        "conversation_id": "string (UUID)",
+        "catalyst_uid": "string",
+        "language": "enum: en | kn",
+        "context_page": "string",
+        "messages": "array of user | assistant | system messages",
+        "citations": "array of CaseMasterID / FindingID references",
         "created_at": "ISO8601 datetime",
         "updated_at": "ISO8601 datetime"
       }
     },
-
     {
-      "name": "CCTNSSyncLog",
-      "description": "CCTNS integration sync logs and reconciliation",
+      "name": "ModelArtifact",
+      "catalyst_service": "Catalyst QuickML + Catalyst Zia AutoML + Stratus",
+      "description": "Model metadata for XGBoost, Isolation Forest, DBSCAN, KMeans, Random Forest, NetworkX, PageRank, Sentence Transformers, Prophet, and LightGBM outputs.",
       "schema": {
-        "sync_id": "string (UUID)",
-        "sync_type": "enum: full | incremental | manual",
-        "started_at": "ISO8601 datetime",
-        "completed_at": "ISO8601 datetime",
-        "status": "enum: running | completed | failed | partial",
-        "records_fetched": "number",
-        "records_inserted": "number",
-        "records_updated": "number",
-        "records_skipped": "number",
-        "records_failed": "number",
-        "errors": "array of error objects",
-        "triggered_by": "enum: cron | manual | api"
+        "artifact_id": "string (UUID)",
+        "model_name": "string",
+        "module_name": "string",
+        "version": "string",
+        "stratus_object_key": "string",
+        "metrics": "object",
+        "feature_importance": "array",
+        "trained_at": "ISO8601 datetime",
+        "active": "boolean"
+      }
+    },
+    {
+      "name": "SignalInbox",
+      "catalyst_service": "Catalyst Signals + Push Notifications",
+      "description": "Alert and workflow event queue for crime spikes, gang movement, repeat offenders, anomalies, high-confidence predictions, and officer overload.",
+      "schema": {
+        "signal_id": "string",
+        "source": "enum: fir | forecast | risk | anomaly | network | copilot | report",
+        "priority": "enum: critical | high | medium | low",
+        "payload": "object",
+        "status": "enum: received | processing | completed | failed",
+        "received_at": "ISO8601 datetime",
+        "processed_at": "ISO8601 datetime"
       }
     }
   ]

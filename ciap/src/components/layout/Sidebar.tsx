@@ -1,10 +1,11 @@
-import React, { useState } from 'react';
-import { NavLink, useLocation } from 'react-router-dom';
+import React from 'react';
+import { NavLink } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import {
   LayoutDashboard, Siren, MapPin, TrendingUp, AlertTriangle,
-  Network, Bell, Bot, FileText, BarChart3, Settings, Users,
-  Shield, ChevronLeft, ChevronRight, ClipboardList, Map,
+  Network, Bell, Bot, BarChart3, Settings, Users,
+  Shield, ChevronLeft, ChevronRight, Map, Radar, Fingerprint,
+  ScanSearch, Route, Activity,
 } from 'lucide-react';
 
 interface NavItemDef {
@@ -19,17 +20,21 @@ const NAV_ITEMS: NavItemDef[] = [
   // Core
   { to: '/', icon: <LayoutDashboard size={18} />, labelKey: 'nav_dashboard', section: 'core' },
   { to: '/command-center', icon: <Siren size={18} />, labelKey: 'nav_command_center', section: 'core' },
-  { to: '/crimes', icon: <ClipboardList size={18} />, labelKey: 'nav_crime_management', section: 'core' },
   // Intelligence
   { to: '/heatmap', icon: <Map size={18} />, labelKey: 'nav_geo_heatmap', section: 'intelligence' },
   { to: '/forecasting', icon: <TrendingUp size={18} />, labelKey: 'nav_forecasting', section: 'intelligence' },
   { to: '/risk', icon: <AlertTriangle size={18} />, labelKey: 'nav_risk_analysis', section: 'intelligence' },
   { to: '/link-analysis', icon: <Network size={18} />, labelKey: 'nav_link_analysis', section: 'intelligence' },
+  { to: '/link-analysis', icon: <Fingerprint size={18} />, labelKey: 'nav_repeat_offenders', section: 'intelligence' },
+  { to: '/link-analysis', icon: <ScanSearch size={18} />, labelKey: 'nav_mo_intelligence', section: 'intelligence' },
+  { to: '/risk', icon: <Radar size={18} />, labelKey: 'nav_anomalies', section: 'intelligence' },
+  { to: '/heatmap', icon: <Route size={18} />, labelKey: 'nav_digital_twin', section: 'intelligence' },
   // Operations
   { to: '/alerts', icon: <Bell size={18} />, labelKey: 'nav_alerts_center', badge: 7, section: 'operations' },
   { to: '/ai-copilot', icon: <Bot size={18} />, labelKey: 'nav_ai_copilot', section: 'operations' },
-  { to: '/citizen-reports', icon: <MapPin size={18} />, labelKey: 'nav_citizen_reports', badge: 3, section: 'operations' },
+  { to: '/risk', icon: <MapPin size={18} />, labelKey: 'nav_resource_optimizer', section: 'operations' },
   { to: '/scrb-reports', icon: <BarChart3 size={18} />, labelKey: 'nav_scrb_reports', section: 'operations' },
+  { to: '/forecasting', icon: <Activity size={18} />, labelKey: 'nav_pattern_discovery', section: 'operations' },
   // System
   { to: '/administration', icon: <Users size={18} />, labelKey: 'nav_administration', section: 'system' },
   { to: '/settings', icon: <Settings size={18} />, labelKey: 'nav_settings', section: 'system' },

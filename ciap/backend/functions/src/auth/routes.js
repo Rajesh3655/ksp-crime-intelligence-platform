@@ -32,6 +32,8 @@ const langSchema = Joi.object({
 // ── Helpers ───────────────────────────────────────────────────────────────────
 const JWT_SECRET  = () => process.env.JWT_SECRET || 'ciap-dev-secret-change-in-production';
 const JWT_EXPIRES = '8h'; // Shift-length JWT expiry
+const DEMO_EMAIL = 'ramaiah@ksp.gov.in';
+const DEMO_PASSWORD = process.env.CIAP_DEMO_PASSWORD || 'Ksp@12345';
 
 const generateToken = (user) => jwt.sign(
   {
@@ -101,7 +103,7 @@ router.post('/login', asyncHandler(async (req, res) => {
     });
   } catch (catalystErr) {
     // Fallback for dev/demo when Catalyst is not configured
-    if (process.env.NODE_ENV === 'development' && email.endsWith('@ksp.gov.in')) {
+    if (process.env.NODE_ENV === 'development' && email === DEMO_EMAIL && password === DEMO_PASSWORD) {
       const mockUser = {
         userId: 1, employeeId: 'KSP-SA-0001',
         name: 'Supt. Ramaiah K.', email, role: 'super_admin',

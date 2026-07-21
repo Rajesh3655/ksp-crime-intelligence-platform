@@ -1,397 +1,489 @@
 -- ============================================================
--- KSP CIAP — Catalyst Data Store Schema
--- Karnataka State Police Crime Intelligence & Analytics Platform
+-- KSP CIAP - Catalyst Data Store Schema Contract
+-- Source of truth: Police_FIR_ER_Diagram.pdf
 -- ============================================================
+--
+-- Rule:
+-- The operational FIR model below mirrors the attached Karnataka Police FIR
+-- ERD. CIAP intelligence features must read from these entities and write
+-- only derived analytics outputs. Do not replace CaseMaster with custom FIR,
+-- Criminal, Station, or Evidence tables.
 
--- ── Users ──────────────────────────────────────────────────────────────────
-CREATE TABLE IF NOT EXISTS Users (
-    user_id         BIGINT AUTO_INCREMENT PRIMARY KEY,
-    catalyst_uid    VARCHAR(100)  UNIQUE NOT NULL COMMENT 'Catalyst Auth UID',
-    employee_id     VARCHAR(50)   UNIQUE NOT NULL,
-    full_name       VARCHAR(150)  NOT NULL,
-    email           VARCHAR(200)  UNIQUE NOT NULL,
-    phone           VARCHAR(20),
-    role            ENUM(
-        'super_admin',
-        'scrb_analyst',
-        'district_officer',
-        'station_officer',
-        'investigator'
-    ) NOT NULL DEFAULT 'investigator',
-    district_id     BIGINT,
-    station_id      BIGINT,
-    lang_preference ENUM('en', 'kn') NOT NULL DEFAULT 'en',
-    status          ENUM('active', 'inactive', 'suspended') NOT NULL DEFAULT 'active',
-    last_login_at   DATETIME,
-    created_at      DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    updated_at      DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-    INDEX idx_role (role),
-    INDEX idx_district (district_id),
-    INDEX idx_status (status)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
-  COMMENT='Platform users with RBAC roles';
+-- --------------------------------------------------------------------------
+-- Official FIR ERD tables
+-- --------------------------------------------------------------------------
 
--- ── District ───────────────────────────────────────────────────────────────
+CREATE TABLE IF NOT EXISTS State (
+    StateID INT PRIMARY KEY,
+    StateName VARCHAR(150) NOT NULL,
+    NationalityID INT,
+    Active BIT DEFAULT 1
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
 CREATE TABLE IF NOT EXISTS District (
-    district_id     BIGINT AUTO_INCREMENT PRIMARY KEY,
-    code            VARCHAR(10)  UNIQUE NOT NULL COMMENT 'e.g. BLR, MYS',
-    name_en         VARCHAR(100) NOT NULL,
-    name_kn         VARCHAR(100) NOT NULL,
-    division        VARCHAR(100),
-    region          VARCHAR(100),
-    hq_lat          DECIMAL(10, 7),
-    hq_lng          DECIMAL(10, 7),
-    commissioner_id BIGINT,
-    is_active       BOOLEAN NOT NULL DEFAULT TRUE,
-    created_at      DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    updated_at      DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-    INDEX idx_code (code)
+    DistrictID INT PRIMARY KEY,
+    DistrictName VARCHAR(150) NOT NULL,
+    StateID INT NOT NULL,
+    Active BIT DEFAULT 1,
+    FOREIGN KEY (StateID) REFERENCES State(StateID)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
--- ── Station ────────────────────────────────────────────────────────────────
-CREATE TABLE IF NOT EXISTS Station (
-    station_id      BIGINT AUTO_INCREMENT PRIMARY KEY,
-    district_id     BIGINT        NOT NULL,
-    code            VARCHAR(20)   UNIQUE NOT NULL,
-    name_en         VARCHAR(150)  NOT NULL,
-    name_kn         VARCHAR(150)  NOT NULL,
-    address         TEXT,
-    lat             DECIMAL(10, 7),
-    lng             DECIMAL(10, 7),
-    officer_count   INT DEFAULT 0,
-    vehicle_count   INT DEFAULT 0,
-    is_active       BOOLEAN NOT NULL DEFAULT TRUE,
-    created_at      DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    updated_at      DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-    FOREIGN KEY (district_id) REFERENCES District(district_id) ON DELETE RESTRICT,
-    INDEX idx_district (district_id)
+CREATE TABLE IF NOT EXISTS UnitType (
+    UnitTypeID INT PRIMARY KEY,
+    UnitTypeName VARCHAR(150) NOT NULL,
+    CityDistState VARCHAR(50),
+    Hierarchy INT,
+    Active BIT DEFAULT 1
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
--- ── FIR ────────────────────────────────────────────────────────────────────
-CREATE TABLE IF NOT EXISTS FIR (
-    fir_id          BIGINT AUTO_INCREMENT PRIMARY KEY,
-    fir_number      VARCHAR(50)   UNIQUE NOT NULL COMMENT 'e.g. BLR/2024/4821',
-    district_id     BIGINT        NOT NULL,
-    station_id      BIGINT        NOT NULL,
-    crime_type      VARCHAR(100)  NOT NULL,
-    crime_category  VARCHAR(100)  NOT NULL,
-    severity        ENUM('critical', 'high', 'medium', 'low') NOT NULL DEFAULT 'medium',
-    status          ENUM('open', 'pending', 'closed', 'escalated') NOT NULL DEFAULT 'open',
-    incident_date   DATE          NOT NULL,
-    incident_time   TIME,
-    location_desc   TEXT,
-    lat             DECIMAL(10, 7),
-    lng             DECIMAL(10, 7),
-    description     TEXT,
-    assigned_to     BIGINT        COMMENT 'user_id of assigned officer',
-    created_by      BIGINT        NOT NULL,
-    closed_at       DATETIME,
-    created_at      DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    updated_at      DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-    FOREIGN KEY (district_id)  REFERENCES District(district_id) ON DELETE RESTRICT,
-    FOREIGN KEY (station_id)   REFERENCES Station(station_id)   ON DELETE RESTRICT,
-    FOREIGN KEY (assigned_to)  REFERENCES Users(user_id)        ON DELETE SET NULL,
-    FOREIGN KEY (created_by)   REFERENCES Users(user_id)        ON DELETE RESTRICT,
-    INDEX idx_district_date    (district_id, incident_date),
-    INDEX idx_station          (station_id),
-    INDEX idx_status           (status),
-    INDEX idx_severity         (severity),
-    INDEX idx_crime_type       (crime_type),
-    INDEX idx_created_at       (created_at),
-    FULLTEXT idx_ft_description (description, crime_type, location_desc)
+CREATE TABLE IF NOT EXISTS Unit (
+    UnitID INT PRIMARY KEY,
+    UnitName VARCHAR(200) NOT NULL,
+    TypeID INT,
+    ParentUnit INT,
+    NationalityID INT,
+    StateID INT,
+    DistrictID INT,
+    Active BIT DEFAULT 1,
+    FOREIGN KEY (TypeID) REFERENCES UnitType(UnitTypeID),
+    FOREIGN KEY (ParentUnit) REFERENCES Unit(UnitID),
+    FOREIGN KEY (StateID) REFERENCES State(StateID),
+    FOREIGN KEY (DistrictID) REFERENCES District(DistrictID),
+    INDEX idx_unit_district (DistrictID),
+    INDEX idx_unit_type (TypeID)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
--- ── CrimeIncident ──────────────────────────────────────────────────────────
-CREATE TABLE IF NOT EXISTS CrimeIncident (
-    incident_id     BIGINT AUTO_INCREMENT PRIMARY KEY,
-    fir_id          BIGINT        NOT NULL,
-    incident_type   VARCHAR(100)  NOT NULL,
-    crime_category  VARCHAR(100)  NOT NULL,
-    severity        ENUM('critical', 'high', 'medium', 'low') NOT NULL,
-    lat             DECIMAL(10, 7) NOT NULL,
-    lng             DECIMAL(10, 7) NOT NULL,
-    location_name   VARCHAR(255),
-    occurred_at     DATETIME      NOT NULL,
-    weapon_used     VARCHAR(100),
-    modus_operandi  TEXT,
-    property_loss   DECIMAL(15, 2),
-    created_at      DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (fir_id) REFERENCES FIR(fir_id) ON DELETE CASCADE,
-    INDEX idx_fir         (fir_id),
-    INDEX idx_occurred    (occurred_at),
-    INDEX idx_geo         (lat, lng),
-    INDEX idx_category    (crime_category)
+CREATE TABLE IF NOT EXISTS Rank (
+    RankID INT PRIMARY KEY,
+    RankName VARCHAR(150) NOT NULL,
+    Hierarchy INT,
+    Active BIT DEFAULT 1
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
--- ── Criminal ───────────────────────────────────────────────────────────────
-CREATE TABLE IF NOT EXISTS Criminal (
-    criminal_id     BIGINT AUTO_INCREMENT PRIMARY KEY,
-    name            VARCHAR(150)  NOT NULL,
-    alias           VARCHAR(200),
-    dob             DATE,
-    gender          ENUM('male', 'female', 'other'),
-    aadhaar_hash    VARCHAR(64)   COMMENT 'SHA-256 of Aadhaar (never store raw)',
-    nationality     VARCHAR(50)   DEFAULT 'Indian',
-    address         TEXT,
-    photo_url       VARCHAR(500)  COMMENT 'Catalyst Stratus URL',
-    face_encoding   TEXT          COMMENT 'Zia Face embedding JSON',
-    risk_score      INT           DEFAULT 0 CHECK (risk_score BETWEEN 0 AND 100),
-    gang_affiliation VARCHAR(200),
-    is_wanted       BOOLEAN       DEFAULT FALSE,
-    is_arrested     BOOLEAN       DEFAULT FALSE,
-    created_by      BIGINT,
-    created_at      DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    updated_at      DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-    FOREIGN KEY (created_by) REFERENCES Users(user_id) ON DELETE SET NULL,
-    INDEX idx_name        (name),
-    INDEX idx_risk        (risk_score),
-    INDEX idx_wanted      (is_wanted),
-    FULLTEXT idx_ft_name  (name, alias)
+CREATE TABLE IF NOT EXISTS Designation (
+    DesignationID INT PRIMARY KEY,
+    DesignationName VARCHAR(150) NOT NULL,
+    Active BIT DEFAULT 1,
+    SortOrder INT
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
--- ── Criminal-FIR Junction ──────────────────────────────────────────────────
-CREATE TABLE IF NOT EXISTS CriminalFIR (
-    id              BIGINT AUTO_INCREMENT PRIMARY KEY,
-    criminal_id     BIGINT NOT NULL,
-    fir_id          BIGINT NOT NULL,
-    role            ENUM('suspect', 'accused', 'witness', 'informant') NOT NULL DEFAULT 'suspect',
-    linked_at       DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    linked_by       BIGINT,
-    FOREIGN KEY (criminal_id) REFERENCES Criminal(criminal_id) ON DELETE CASCADE,
-    FOREIGN KEY (fir_id)      REFERENCES FIR(fir_id)           ON DELETE CASCADE,
-    FOREIGN KEY (linked_by)   REFERENCES Users(user_id)         ON DELETE SET NULL,
-    UNIQUE KEY uq_criminal_fir (criminal_id, fir_id),
-    INDEX idx_criminal (criminal_id),
-    INDEX idx_fir      (fir_id)
+CREATE TABLE IF NOT EXISTS Employee (
+    EmployeeID INT PRIMARY KEY,
+    DistrictID INT,
+    UnitID INT,
+    RankID INT,
+    DesignationID INT,
+    KGID VARCHAR(50),
+    FirstName VARCHAR(150),
+    EmployeeDOB DATE,
+    GenderID INT,
+    BloodGroupID INT,
+    PhysicallyChallenged BIT,
+    AppointmentDate DATE,
+    FOREIGN KEY (DistrictID) REFERENCES District(DistrictID),
+    FOREIGN KEY (UnitID) REFERENCES Unit(UnitID),
+    FOREIGN KEY (RankID) REFERENCES Rank(RankID),
+    FOREIGN KEY (DesignationID) REFERENCES Designation(DesignationID),
+    INDEX idx_employee_unit (UnitID),
+    INDEX idx_employee_rank (RankID)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
--- ── Victim ─────────────────────────────────────────────────────────────────
+CREATE TABLE IF NOT EXISTS CaseCategory (
+    CaseCategoryID INT PRIMARY KEY,
+    LookupValue VARCHAR(100) NOT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS GravityOffence (
+    GravityOffenceID INT PRIMARY KEY,
+    LookupValue VARCHAR(100) NOT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS CaseStatusMaster (
+    CaseStatusID INT PRIMARY KEY,
+    CaseStatusName VARCHAR(150) NOT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS Court (
+    CourtID INT PRIMARY KEY,
+    CourtName VARCHAR(200) NOT NULL,
+    DistrictID INT,
+    StateID INT,
+    Active BIT DEFAULT 1,
+    FOREIGN KEY (DistrictID) REFERENCES District(DistrictID),
+    FOREIGN KEY (StateID) REFERENCES State(StateID)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS CrimeHead (
+    CrimeHeadID INT PRIMARY KEY,
+    CrimeGroupName VARCHAR(200) NOT NULL,
+    Active BIT DEFAULT 1
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS CrimeSubHead (
+    CrimeSubHeadID INT PRIMARY KEY,
+    CrimeHeadID INT NOT NULL,
+    CrimeHeadName VARCHAR(200) NOT NULL,
+    SeqID INT,
+    FOREIGN KEY (CrimeHeadID) REFERENCES CrimeHead(CrimeHeadID)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS CaseMaster (
+    CaseMasterID INT PRIMARY KEY,
+    CrimeNo VARCHAR(30) NOT NULL,
+    CaseNo VARCHAR(20),
+    CrimeRegisteredDate DATE,
+    PolicePersonID INT,
+    PoliceStationID INT,
+    CaseCategoryID INT,
+    GravityOffenceID INT,
+    CrimeMajorHeadID INT,
+    CrimeMinorHeadID INT,
+    CaseStatusID INT,
+    CourtID INT,
+    IncidentFromDate DATETIME,
+    IncidentToDate DATETIME,
+    InfoReceivedPSDate DATETIME,
+    latitude DECIMAL(10, 7),
+    longitude DECIMAL(10, 7),
+    BriefFacts LONGTEXT,
+    FOREIGN KEY (PolicePersonID) REFERENCES Employee(EmployeeID),
+    FOREIGN KEY (PoliceStationID) REFERENCES Unit(UnitID),
+    FOREIGN KEY (CaseCategoryID) REFERENCES CaseCategory(CaseCategoryID),
+    FOREIGN KEY (GravityOffenceID) REFERENCES GravityOffence(GravityOffenceID),
+    FOREIGN KEY (CrimeMajorHeadID) REFERENCES CrimeHead(CrimeHeadID),
+    FOREIGN KEY (CrimeMinorHeadID) REFERENCES CrimeSubHead(CrimeSubHeadID),
+    FOREIGN KEY (CaseStatusID) REFERENCES CaseStatusMaster(CaseStatusID),
+    FOREIGN KEY (CourtID) REFERENCES Court(CourtID),
+    UNIQUE KEY uq_case_crime_no (CrimeNo),
+    INDEX idx_case_station_date (PoliceStationID, CrimeRegisteredDate),
+    INDEX idx_case_geo (latitude, longitude),
+    FULLTEXT idx_case_facts (BriefFacts)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS OccupationMaster (
+    OccupationID INT PRIMARY KEY,
+    OccupationName VARCHAR(150) NOT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS ReligionMaster (
+    ReligionID INT PRIMARY KEY,
+    ReligionName VARCHAR(150) NOT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS CasteMaster (
+    caste_master_id INT PRIMARY KEY,
+    caste_master_name VARCHAR(150) NOT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS ComplainantDetails (
+    ComplainantID INT PRIMARY KEY,
+    CaseMasterID INT NOT NULL,
+    ComplainantName VARCHAR(200),
+    AgeYear INT,
+    OccupationID INT,
+    ReligionID INT,
+    CasteID INT,
+    GenderID INT,
+    FOREIGN KEY (CaseMasterID) REFERENCES CaseMaster(CaseMasterID),
+    FOREIGN KEY (OccupationID) REFERENCES OccupationMaster(OccupationID),
+    FOREIGN KEY (ReligionID) REFERENCES ReligionMaster(ReligionID),
+    FOREIGN KEY (CasteID) REFERENCES CasteMaster(caste_master_id),
+    INDEX idx_complainant_case (CaseMasterID)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
 CREATE TABLE IF NOT EXISTS Victim (
-    victim_id           BIGINT AUTO_INCREMENT PRIMARY KEY,
-    fir_id              BIGINT        NOT NULL,
-    name                VARCHAR(150)  NOT NULL,
-    age                 INT,
-    gender              ENUM('male', 'female', 'other'),
-    contact             VARCHAR(20),
-    address             TEXT,
-    vulnerability_score INT DEFAULT 0 CHECK (vulnerability_score BETWEEN 0 AND 100),
-    injury_type         VARCHAR(100),
-    statement_recorded  BOOLEAN DEFAULT FALSE,
-    created_at          DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (fir_id) REFERENCES FIR(fir_id) ON DELETE CASCADE,
-    INDEX idx_fir (fir_id)
+    VictimMasterID INT PRIMARY KEY,
+    CaseMasterID INT NOT NULL,
+    VictimName VARCHAR(200),
+    AgeYear INT,
+    GenderID INT,
+    VictimPolice VARCHAR(10),
+    FOREIGN KEY (CaseMasterID) REFERENCES CaseMaster(CaseMasterID),
+    INDEX idx_victim_case (CaseMasterID)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
--- ── Evidence ───────────────────────────────────────────────────────────────
-CREATE TABLE IF NOT EXISTS Evidence (
-    evidence_id     BIGINT AUTO_INCREMENT PRIMARY KEY,
-    fir_id          BIGINT        NOT NULL,
-    type            ENUM('document', 'image', 'video', 'audio', 'physical', 'digital') NOT NULL,
-    description     VARCHAR(500),
-    storage_url     VARCHAR(500)  COMMENT 'Catalyst Stratus URL',
-    ocr_text        LONGTEXT      COMMENT 'Extracted by Zia OCR',
-    hash_sha256     VARCHAR(64)   COMMENT 'File integrity hash',
-    file_size_bytes BIGINT,
-    uploaded_by     BIGINT,
-    created_at      DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (fir_id)      REFERENCES FIR(fir_id)      ON DELETE CASCADE,
-    FOREIGN KEY (uploaded_by) REFERENCES Users(user_id)    ON DELETE SET NULL,
-    INDEX idx_fir  (fir_id),
-    INDEX idx_type (type)
+CREATE TABLE IF NOT EXISTS Accused (
+    AccusedMasterID INT PRIMARY KEY,
+    CaseMasterID INT NOT NULL,
+    AccusedName VARCHAR(200),
+    AgeYear INT,
+    GenderID INT,
+    PersonID VARCHAR(20),
+    FOREIGN KEY (CaseMasterID) REFERENCES CaseMaster(CaseMasterID),
+    INDEX idx_accused_case (CaseMasterID),
+    FULLTEXT idx_accused_name (AccusedName)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
--- ── Forecast ───────────────────────────────────────────────────────────────
-CREATE TABLE IF NOT EXISTS Forecast (
-    forecast_id     BIGINT AUTO_INCREMENT PRIMARY KEY,
-    district_id     BIGINT,
-    crime_type      VARCHAR(100),
-    forecast_start  DATE          NOT NULL,
-    forecast_end    DATE          NOT NULL,
-    predicted_count INT           NOT NULL,
-    lower_bound     INT,
-    upper_bound     INT,
-    confidence_pct  DECIMAL(5, 2) COMMENT 'e.g. 87.5 = 87.5% confidence',
-    model_name      VARCHAR(100)  DEFAULT 'Zia AutoML LSTM',
-    model_version   VARCHAR(50),
-    model_accuracy  DECIMAL(5, 2) COMMENT 'Model accuracy at time of generation',
-    explanation     JSON          COMMENT 'Explainability factors as JSON',
-    generated_by    BIGINT        COMMENT 'Zia Job ID',
-    generated_at    DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (district_id) REFERENCES District(district_id) ON DELETE SET NULL,
-    INDEX idx_district_date (district_id, forecast_start),
-    INDEX idx_crime_type    (crime_type)
+CREATE TABLE IF NOT EXISTS Act (
+    ActCode VARCHAR(50) PRIMARY KEY,
+    ActDescription VARCHAR(500),
+    ShortName VARCHAR(100),
+    Active BIT DEFAULT 1
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
--- ── RiskScore ──────────────────────────────────────────────────────────────
-CREATE TABLE IF NOT EXISTS RiskScore (
-    score_id            BIGINT AUTO_INCREMENT PRIMARY KEY,
-    district_id         BIGINT,
-    station_id          BIGINT,
-    overall_score       INT NOT NULL CHECK (overall_score BETWEEN 0 AND 100),
-    risk_level          ENUM('critical', 'high', 'medium', 'low') NOT NULL,
-    crime_rate_score    INT,
-    recidivism_score    INT,
-    socioeconomic_score INT,
-    infrastructure_score INT,
-    trend               ENUM('up', 'down', 'stable') DEFAULT 'stable',
-    computed_at         DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    valid_until         DATETIME,
-    FOREIGN KEY (district_id) REFERENCES District(district_id) ON DELETE SET NULL,
-    FOREIGN KEY (station_id)  REFERENCES Station(station_id)   ON DELETE SET NULL,
-    INDEX idx_district     (district_id),
-    INDEX idx_computed     (computed_at),
-    INDEX idx_risk_level   (risk_level)
+CREATE TABLE IF NOT EXISTS Section (
+    ActCode VARCHAR(50) NOT NULL,
+    SectionCode VARCHAR(50) NOT NULL,
+    SectionDescription VARCHAR(500),
+    Active BIT DEFAULT 1,
+    PRIMARY KEY (ActCode, SectionCode),
+    FOREIGN KEY (ActCode) REFERENCES Act(ActCode)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
--- ── Alert ──────────────────────────────────────────────────────────────────
-CREATE TABLE IF NOT EXISTS Alert (
-    alert_id        BIGINT AUTO_INCREMENT PRIMARY KEY,
-    alert_type      VARCHAR(100)  NOT NULL,
-    severity        ENUM('critical', 'high', 'medium', 'low') NOT NULL,
-    district_id     BIGINT,
-    station_id      BIGINT,
-    fir_id          BIGINT,
-    message         TEXT          NOT NULL,
-    message_kn      TEXT          COMMENT 'Kannada translation of message',
-    status          ENUM('active', 'acknowledged', 'resolved') NOT NULL DEFAULT 'active',
-    trigger_source  VARCHAR(100)  COMMENT 'e.g. Catalyst Signals, Manual, Zia',
-    signal_id       VARCHAR(200)  COMMENT 'Catalyst Signal ID that triggered this',
-    assigned_to     BIGINT,
-    acknowledged_by BIGINT,
-    acknowledged_at DATETIME,
-    resolved_by     BIGINT,
-    resolved_at     DATETIME,
-    created_at      DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    updated_at      DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-    FOREIGN KEY (district_id)     REFERENCES District(district_id) ON DELETE SET NULL,
-    FOREIGN KEY (station_id)      REFERENCES Station(station_id)   ON DELETE SET NULL,
-    FOREIGN KEY (fir_id)          REFERENCES FIR(fir_id)           ON DELETE SET NULL,
-    FOREIGN KEY (assigned_to)     REFERENCES Users(user_id)        ON DELETE SET NULL,
-    FOREIGN KEY (acknowledged_by) REFERENCES Users(user_id)        ON DELETE SET NULL,
-    FOREIGN KEY (resolved_by)     REFERENCES Users(user_id)        ON DELETE SET NULL,
-    INDEX idx_status   (status),
-    INDEX idx_severity (severity),
-    INDEX idx_district (district_id),
-    INDEX idx_created  (created_at)
+CREATE TABLE IF NOT EXISTS ActSectionAssociation (
+    CaseMasterID INT NOT NULL,
+    ActID VARCHAR(50) NOT NULL,
+    SectionID VARCHAR(50) NOT NULL,
+    ActOrderID INT,
+    SectionOrderID INT,
+    PRIMARY KEY (CaseMasterID, ActID, SectionID),
+    FOREIGN KEY (CaseMasterID) REFERENCES CaseMaster(CaseMasterID),
+    FOREIGN KEY (ActID) REFERENCES Act(ActCode),
+    FOREIGN KEY (ActID, SectionID) REFERENCES Section(ActCode, SectionCode)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
--- ── CitizenReport ──────────────────────────────────────────────────────────
-CREATE TABLE IF NOT EXISTS CitizenReport (
-    report_id       BIGINT AUTO_INCREMENT PRIMARY KEY,
-    category        VARCHAR(100),
-    description     TEXT          NOT NULL,
-    lat             DECIMAL(10, 7),
-    lng             DECIMAL(10, 7),
-    location_name   VARCHAR(255),
-    media_url       VARCHAR(500)  COMMENT 'Catalyst Stratus URL',
-    reporter_phone  VARCHAR(20)   COMMENT 'Hashed for privacy',
-    status          ENUM('pending', 'verified', 'rejected', 'converted') NOT NULL DEFAULT 'pending',
-    verified_by     BIGINT,
-    verified_at     DATETIME,
-    fir_id          BIGINT        COMMENT 'Set when converted to FIR',
-    assigned_station BIGINT,
-    rejection_reason VARCHAR(500),
-    created_at      DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (verified_by)       REFERENCES Users(user_id)    ON DELETE SET NULL,
-    FOREIGN KEY (fir_id)            REFERENCES FIR(fir_id)       ON DELETE SET NULL,
-    FOREIGN KEY (assigned_station)  REFERENCES Station(station_id) ON DELETE SET NULL,
-    INDEX idx_status  (status),
-    INDEX idx_created (created_at)
+CREATE TABLE IF NOT EXISTS CrimeHeadActSection (
+    CrimeHeadID INT NOT NULL,
+    ActCode VARCHAR(50) NOT NULL,
+    SectionCode VARCHAR(50) NOT NULL,
+    PRIMARY KEY (CrimeHeadID, ActCode, SectionCode),
+    FOREIGN KEY (CrimeHeadID) REFERENCES CrimeHead(CrimeHeadID),
+    FOREIGN KEY (ActCode) REFERENCES Act(ActCode),
+    FOREIGN KEY (ActCode, SectionCode) REFERENCES Section(ActCode, SectionCode)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
--- ── AuditLog ───────────────────────────────────────────────────────────────
+CREATE TABLE IF NOT EXISTS ArrestSurrender (
+    ArrestSurrenderID INT PRIMARY KEY,
+    CaseMasterID INT NOT NULL,
+    ArrestSurrenderTypeID INT,
+    ArrestSurrenderDate DATE,
+    ArrestSurrenderStateId INT,
+    ArrestSurrenderDistrictId INT,
+    PoliceStationID INT,
+    IOID INT,
+    CourtID INT,
+    AccusedMasterID INT,
+    IsAccused BIT,
+    IsComplainantAccused BIT,
+    FOREIGN KEY (CaseMasterID) REFERENCES CaseMaster(CaseMasterID),
+    FOREIGN KEY (ArrestSurrenderStateId) REFERENCES State(StateID),
+    FOREIGN KEY (ArrestSurrenderDistrictId) REFERENCES District(DistrictID),
+    FOREIGN KEY (PoliceStationID) REFERENCES Unit(UnitID),
+    FOREIGN KEY (IOID) REFERENCES Employee(EmployeeID),
+    FOREIGN KEY (CourtID) REFERENCES Court(CourtID),
+    FOREIGN KEY (AccusedMasterID) REFERENCES Accused(AccusedMasterID),
+    INDEX idx_arrest_case (CaseMasterID),
+    INDEX idx_arrest_accused (AccusedMasterID)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS ChargesheetDetails (
+    CSID INT PRIMARY KEY,
+    CaseMasterID INT NOT NULL,
+    csdate DATETIME,
+    cstype CHAR(1),
+    PolicePersonID INT,
+    FOREIGN KEY (CaseMasterID) REFERENCES CaseMaster(CaseMasterID),
+    FOREIGN KEY (PolicePersonID) REFERENCES Employee(EmployeeID),
+    INDEX idx_chargesheet_case (CaseMasterID)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- --------------------------------------------------------------------------
+-- CIAP intelligence outputs derived from the official ERD
+-- --------------------------------------------------------------------------
+
+CREATE TABLE IF NOT EXISTS Users (
+    user_id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    catalyst_uid VARCHAR(100) UNIQUE NOT NULL,
+    employee_id INT NOT NULL,
+    full_name VARCHAR(150) NOT NULL,
+    email VARCHAR(200) UNIQUE NOT NULL,
+    phone VARCHAR(20),
+    password_hash VARCHAR(255),
+    role ENUM('super_admin','scrb_analyst','district_officer','station_officer','investigator') NOT NULL,
+    district_id INT,
+    station_id INT,
+    lang_preference ENUM('en','kn') DEFAULT 'en',
+    status ENUM('active','inactive','suspended') DEFAULT 'active',
+    last_login_at DATETIME,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    FOREIGN KEY (employee_id) REFERENCES Employee(EmployeeID),
+    FOREIGN KEY (district_id) REFERENCES District(DistrictID),
+    FOREIGN KEY (station_id) REFERENCES Unit(UnitID),
+    INDEX idx_users_role (role),
+    INDEX idx_users_district (district_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS IntelligenceRun (
+    IntelligenceRunID BIGINT AUTO_INCREMENT PRIMARY KEY,
+    ModuleName ENUM('dashboard','geo','pattern','link','repeat_offender','modus_operandi','forecast','socio_economic','risk','anomaly','timeline','copilot','report','alert') NOT NULL,
+    CatalystService VARCHAR(80) NOT NULL,
+    ModelName VARCHAR(120),
+    InputSnapshot JSON,
+    Status ENUM('queued','running','completed','failed') DEFAULT 'queued',
+    StartedAt DATETIME DEFAULT CURRENT_TIMESTAMP,
+    CompletedAt DATETIME,
+    ErrorMessage TEXT
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS IntelligenceFinding (
+    FindingID BIGINT AUTO_INCREMENT PRIMARY KEY,
+    IntelligenceRunID BIGINT,
+    CaseMasterID INT,
+    DistrictID INT,
+    PoliceStationID INT,
+    FindingType ENUM('pattern','hotspot','forecast','risk','anomaly','network','repeat_offender','modus_operandi','deployment','report') NOT NULL,
+    Severity ENUM('green','yellow','orange','red') DEFAULT 'yellow',
+    ConfidencePct DECIMAL(5,2),
+    Summary VARCHAR(500) NOT NULL,
+    Explanation JSON NOT NULL,
+    SupportingCases JSON,
+    CreatedAt DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (IntelligenceRunID) REFERENCES IntelligenceRun(IntelligenceRunID),
+    FOREIGN KEY (CaseMasterID) REFERENCES CaseMaster(CaseMasterID),
+    FOREIGN KEY (DistrictID) REFERENCES District(DistrictID),
+    FOREIGN KEY (PoliceStationID) REFERENCES Unit(UnitID),
+    INDEX idx_finding_type (FindingType),
+    INDEX idx_finding_station (PoliceStationID),
+    INDEX idx_finding_created (CreatedAt)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS AIFeatureStore (
+    FeatureID BIGINT AUTO_INCREMENT PRIMARY KEY,
+    CaseMasterID INT,
+    VectorType ENUM('crime_embedding','risk_vector','prediction','historical_trend','gang_metric','similarity_vector') NOT NULL,
+    SourceHash VARCHAR(64) NOT NULL,
+    FeatureVector JSON NOT NULL,
+    Metadata JSON,
+    CreatedAt DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (CaseMasterID) REFERENCES CaseMaster(CaseMasterID),
+    UNIQUE KEY uq_feature_source (CaseMasterID, VectorType, SourceHash),
+    INDEX idx_feature_case (CaseMasterID),
+    INDEX idx_feature_type (VectorType)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS ImmutableIntelligenceHistory (
+    HistoryID BIGINT AUTO_INCREMENT PRIMARY KEY,
+    CaseMasterID INT,
+    EventType VARCHAR(120) NOT NULL,
+    Payload JSON NOT NULL,
+    PayloadHash VARCHAR(64) NOT NULL,
+    CreatedAt DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (CaseMasterID) REFERENCES CaseMaster(CaseMasterID),
+    INDEX idx_history_case (CaseMasterID),
+    INDEX idx_history_event (EventType)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS MLTrainingDataset (
+    DatasetID BIGINT AUTO_INCREMENT PRIMARY KEY,
+    DatasetVersion VARCHAR(80) UNIQUE NOT NULL,
+    SourceHash VARCHAR(64) NOT NULL,
+    SourceTables JSON NOT NULL,
+    RowCount INT NOT NULL DEFAULT 0,
+    FeatureCount INT NOT NULL DEFAULT 0,
+    StratusObjectKey VARCHAR(500),
+    Status ENUM('building','ready','failed','archived') DEFAULT 'building',
+    BuiltAt DATETIME DEFAULT CURRENT_TIMESTAMP,
+    BuiltBy VARCHAR(100)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS MLModelRegistry (
+    ModelRegistryID BIGINT AUTO_INCREMENT PRIMARY KEY,
+    ModelID VARCHAR(120) NOT NULL,
+    Version VARCHAR(80) NOT NULL,
+    TrainingDate DATETIME NOT NULL,
+    Algorithm VARCHAR(120) NOT NULL,
+    Hyperparameters JSON,
+    Accuracy DECIMAL(8,5),
+    PrecisionScore DECIMAL(8,5),
+    RecallScore DECIMAL(8,5),
+    F1Score DECIMAL(8,5),
+    AUCScore DECIMAL(8,5),
+    TrainingDatasetVersion VARCHAR(80),
+    DeploymentStatus ENUM('development','shadow','production','archived') DEFAULT 'development',
+    ApprovalStatus ENUM('pending','approved','rejected','auto_approved') DEFAULT 'pending',
+    ArtifactPath VARCHAR(500),
+    SupportedTasks JSON NOT NULL,
+    CreatedAt DATETIME DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE KEY uq_model_version (ModelID, Version),
+    FOREIGN KEY (TrainingDatasetVersion) REFERENCES MLTrainingDataset(DatasetVersion)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS MLPredictionAudit (
+    PredictionAuditID BIGINT AUTO_INCREMENT PRIMARY KEY,
+    CaseMasterID INT,
+    InputHash VARCHAR(64) NOT NULL,
+    FeatureVersion VARCHAR(80) NOT NULL,
+    ModelID VARCHAR(120) NOT NULL,
+    ModelVersion VARCHAR(80) NOT NULL,
+    Output JSON NOT NULL,
+    Confidence DECIMAL(8,5),
+    Reliability DECIMAL(8,5),
+    ExpectedError DECIMAL(8,5),
+    Uncertainty DECIMAL(8,5),
+    OfficerID INT,
+    DistrictID INT,
+    CreatedAt DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (CaseMasterID) REFERENCES CaseMaster(CaseMasterID),
+    FOREIGN KEY (OfficerID) REFERENCES Employee(EmployeeID),
+    FOREIGN KEY (DistrictID) REFERENCES District(DistrictID),
+    INDEX idx_prediction_case (CaseMasterID),
+    INDEX idx_prediction_model (ModelID, ModelVersion),
+    INDEX idx_prediction_created (CreatedAt)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS MLDriftEvent (
+    DriftEventID BIGINT AUTO_INCREMENT PRIMARY KEY,
+    ModelID VARCHAR(120) NOT NULL,
+    ModelVersion VARCHAR(80),
+    DriftType ENUM('data','concept','prediction','feature') NOT NULL,
+    DriftScore DECIMAL(8,5) NOT NULL,
+    Threshold DECIMAL(8,5) NOT NULL,
+    Status ENUM('detected','retraining_queued','approved','dismissed') DEFAULT 'detected',
+    Evidence JSON,
+    CreatedAt DATETIME DEFAULT CURRENT_TIMESTAMP,
+    INDEX idx_drift_model (ModelID, CreatedAt)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS HumanFeedback (
+    FeedbackID BIGINT AUTO_INCREMENT PRIMARY KEY,
+    CaseMasterID INT,
+    FindingID BIGINT,
+    FeedbackType ENUM('prediction_usefulness','hotspot_accuracy','mo_similarity','gang_detection','risk_explanation') NOT NULL,
+    Rating INT NOT NULL CHECK (Rating BETWEEN 1 AND 5),
+    Comment VARCHAR(1000),
+    OfficerID INT,
+    CreatedAt DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (CaseMasterID) REFERENCES CaseMaster(CaseMasterID),
+    FOREIGN KEY (FindingID) REFERENCES IntelligenceFinding(FindingID),
+    FOREIGN KEY (OfficerID) REFERENCES Employee(EmployeeID),
+    INDEX idx_feedback_type (FeedbackType),
+    INDEX idx_feedback_case (CaseMasterID)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS GeneratedIntelligenceReport (
+    ReportID BIGINT AUTO_INCREMENT PRIMARY KEY,
+    ReportType ENUM('SCRB','weekly','monthly','quarterly','briefing','custom') NOT NULL,
+    DistrictID INT,
+    PeriodStart DATE,
+    PeriodEnd DATE,
+    SmartBrowzJobID VARCHAR(200),
+    StratusObjectKey VARCHAR(500),
+    Status ENUM('queued','generating','ready','failed') DEFAULT 'queued',
+    RequestedBy VARCHAR(100),
+    CreatedAt DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (DistrictID) REFERENCES District(DistrictID),
+    FOREIGN KEY (RequestedBy) REFERENCES Users(catalyst_uid)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
 CREATE TABLE IF NOT EXISTS AuditLog (
-    log_id          BIGINT AUTO_INCREMENT PRIMARY KEY,
-    user_id         BIGINT,
-    action          VARCHAR(100)  NOT NULL,
-    resource_type   VARCHAR(100)  NOT NULL,
-    resource_id     VARCHAR(200),
-    old_values      JSON,
-    new_values      JSON,
-    ip_address      VARCHAR(45),
-    user_agent      VARCHAR(500),
-    session_id      VARCHAR(200),
-    created_at      DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (user_id) REFERENCES Users(user_id) ON DELETE SET NULL,
-    INDEX idx_user    (user_id),
-    INDEX idx_action  (action),
-    INDEX idx_created (created_at),
-    INDEX idx_resource (resource_type, resource_id)
+    AuditLogID BIGINT AUTO_INCREMENT PRIMARY KEY,
+    CatalystUID VARCHAR(100),
+    Action VARCHAR(120) NOT NULL,
+    ResourceType VARCHAR(120) NOT NULL,
+    ResourceID VARCHAR(200),
+    Payload JSON,
+    CreatedAt DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (CatalystUID) REFERENCES CatalystUserProfile(CatalystUID),
+    INDEX idx_audit_user_date (CatalystUID, CreatedAt)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
--- ── GeneratedReport ────────────────────────────────────────────────────────
-CREATE TABLE IF NOT EXISTS GeneratedReport (
-    report_id       BIGINT AUTO_INCREMENT PRIMARY KEY,
-    report_name     VARCHAR(300)  NOT NULL,
-    report_type     ENUM('monthly', 'quarterly', 'scrb', 'briefing', 'custom') NOT NULL,
-    district_id     BIGINT,
-    period_start    DATE,
-    period_end      DATE,
-    status          ENUM('queued', 'generating', 'ready', 'failed') NOT NULL DEFAULT 'queued',
-    pdf_url         VARCHAR(500)  COMMENT 'Catalyst Stratus URL for PDF',
-    excel_url       VARCHAR(500)  COMMENT 'Catalyst Stratus URL for Excel',
-    file_size_bytes BIGINT,
-    smartbrowz_job  VARCHAR(200)  COMMENT 'Catalyst SmartBrowz job ID',
-    requested_by    BIGINT,
-    completed_at    DATETIME,
-    created_at      DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (district_id)  REFERENCES District(district_id) ON DELETE SET NULL,
-    FOREIGN KEY (requested_by) REFERENCES Users(user_id)        ON DELETE SET NULL,
-    INDEX idx_type    (report_type),
-    INDEX idx_status  (status),
-    INDEX idx_created (created_at)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
--- ── IngestionBatch ─────────────────────────────────────────────────────────
-CREATE TABLE IF NOT EXISTS IngestionBatch (
-    batch_id        BIGINT AUTO_INCREMENT PRIMARY KEY,
-    source          ENUM('csv', 'excel', 'citizen', 'cctns', 'census', 'api') NOT NULL,
-    filename        VARCHAR(300),
-    storage_url     VARCHAR(500),
-    status          ENUM('uploaded', 'validating', 'processing', 'completed', 'failed') NOT NULL DEFAULT 'uploaded',
-    total_records   INT DEFAULT 0,
-    processed_records INT DEFAULT 0,
-    failed_records  INT DEFAULT 0,
-    error_log       JSON,
-    uploaded_by     BIGINT,
-    completed_at    DATETIME,
-    created_at      DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (uploaded_by) REFERENCES Users(user_id) ON DELETE SET NULL,
-    INDEX idx_status  (status),
-    INDEX idx_source  (source),
-    INDEX idx_created (created_at)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
--- ── Seed: Karnataka Districts ──────────────────────────────────────────────
-INSERT INTO District (code, name_en, name_kn, division, hq_lat, hq_lng) VALUES
-('BLR',  'Bengaluru Urban',   'ಬೆಂಗಳೂರು ನಗರ',      'Bengaluru',  12.9716, 77.5946),
-('MYS',  'Mysuru',            'ಮೈಸೂರು',             'Mysuru',     12.2958, 76.6394),
-('MNG',  'Mangaluru',         'ಮಂಗಳೂರು',            'Coastal',    12.8698, 74.8426),
-('HUB',  'Hubballi-Dharwad',  'ಹುಬ್ಬಳ್ಳಿ-ಧಾರವಾಡ',  'North',      15.3647, 75.1240),
-('BEL',  'Belagavi',          'ಬೆಳಗಾವಿ',            'North',      15.8497, 74.4977),
-('KLB',  'Kalaburagi',        'ಕಲಬುರಗಿ',            'Kalyana',    17.3297, 76.8343),
-('BAL',  'Ballari',           'ಬಳ್ಳಾರಿ',            'Kalyana',    15.1394, 76.9214),
-('SHI',  'Shivamogga',        'ಶಿವಮೊಗ್ಗ',           'Central',    13.9299, 75.5681),
-('TUM',  'Tumakuru',          'ತುಮಕೂರು',            'Bengaluru',  13.3379, 77.1173),
-('DAV',  'Davangere',         'ದಾವಣಗೆರೆ',           'Central',    14.4644, 75.9218),
-('VIJ',  'Vijayapura',        'ವಿಜಯಪುರ',            'Kalyana',    16.8302, 75.7100),
-('RMN',  'Ramanagara',        'ರಾಮನಗರ',             'Bengaluru',  12.7161, 77.2807),
-('CHI',  'Chikkamagaluru',    'ಚಿಕ್ಕಮಗಳೂರು',       'Central',    13.3161, 75.7720),
-('HAV',  'Haveri',            'ಹಾವೇರಿ',             'North',      14.7939, 75.3996),
-('GDG',  'Gadag',             'ಗದಗ',                'North',      15.4252, 75.6200),
-('KOP',  'Koppal',            'ಕೊಪ್ಪಳ',             'Kalyana',    15.3490, 76.1542),
-('RAI',  'Raichur',           'ರಾಯಚೂರು',            'Kalyana',    16.2120, 77.3439),
-('YAD',  'Yadgir',            'ಯಾದಗಿರಿ',            'Kalyana',    16.7700, 77.1380),
-('BGA',  'Bagalkot',          'ಬಾಗಲಕೋಟೆ',           'North',      16.1691, 75.6965),
-('DHW',  'Dharwad',           'ಧಾರವಾಡ',             'North',      15.4589, 75.0078),
-('UDU',  'Udupi',             'ಉಡುಪಿ',              'Coastal',    13.3409, 74.7421),
-('DKA',  'Dakshina Kannada',  'ದಕ್ಷಿಣ ಕನ್ನಡ',       'Coastal',    12.8438, 74.9900),
-('UKA',  'Uttara Kannada',    'ಉತ್ತರ ಕನ್ನಡ',        'Coastal',    14.7943, 74.1316),
-('HSN',  'Hassan',            'ಹಾಸನ',               'Mysuru',     13.0033, 76.1004),
-('MND',  'Mandya',            'ಮಂಡ್ಯ',              'Mysuru',     12.5218, 76.8951),
-('CHA',  'Chamarajanagara',   'ಚಾಮರಾಜನಗರ',          'Mysuru',     11.9261, 76.9447),
-('KOD',  'Kodagu',            'ಕೊಡಗು',              'Mysuru',     12.3375, 75.8069),
-('CHK',  'Chikkaballapur',    'ಚಿಕ್ಕಬಳ್ಳಾಪುರ',     'Bengaluru',  13.4355, 77.7277),
-('KLR',  'Kolar',             'ಕೋಲಾರ',              'Bengaluru',  13.1369, 78.1337),
-('BLR_R','Bengaluru Rural',   'ಬೆಂಗಳೂರು ಗ್ರಾಮಾಂತರ', 'Bengaluru',  12.9716, 77.5946)
-ON DUPLICATE KEY UPDATE name_en = VALUES(name_en);

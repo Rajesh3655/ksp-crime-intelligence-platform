@@ -5,7 +5,6 @@
 
 'use strict';
 
-const catalyst = require('catalyst-sdk');
 const express  = require('express');
 const helmet   = require('helmet');
 const cors     = require('cors');
@@ -21,8 +20,10 @@ const riskRoutes       = require('./src/risk/routes');
 const ingestionRoutes  = require('./src/ingestion/routes');
 const reportRoutes     = require('./src/reports/routes');
 const aiRoutes         = require('./src/ai/routes');
-const citizenRoutes    = require('./src/citizen/routes');
+const intelligenceRoutes = require('./src/intelligence/routes');
 const adminRoutes      = require('./src/admin/routes');
+const monitoringRoutes = require('./src/monitoring/routes');
+const mlRoutes         = require('./src/ml/routes');
 
 // Middleware
 const { authenticateToken } = require('./src/middleware/auth');
@@ -99,9 +100,10 @@ app.use('/api/risk',        authenticateToken, riskRoutes);
 app.use('/api/ingest',      authenticateToken, ingestionRoutes);
 app.use('/api/reports',     authenticateToken, reportRoutes);
 app.use('/api/ai',          authenticateToken, aiRoutes);
-app.use('/api/citizen',     citizenRoutes);   // citizens don't need auth to submit
-app.use('/api/citizen/admin', authenticateToken, citizenRoutes); // admin actions need auth
+app.use('/api/intelligence', authenticateToken, intelligenceRoutes);
 app.use('/api/admin',       authenticateToken, adminRoutes);
+app.use('/api/monitoring',   authenticateToken, monitoringRoutes);
+app.use('/api/ml',           authenticateToken, mlRoutes);
 
 // ── 404 Handler ──────────────────────────────────────────────────────────────
 app.use((req, res) => {

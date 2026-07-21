@@ -8,6 +8,14 @@
     ],
     "source": "backend/functions"
   },
+  "appsail": {
+    "targets": [
+      {
+        "name": "ciap-ai-service",
+        "source": "backend/appsail/ai-service"
+      }
+    ]
+  },
   "circuits": {
     "source": "backend/circuits"
   },

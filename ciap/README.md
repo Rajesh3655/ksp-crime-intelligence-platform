@@ -1,32 +1,112 @@
-# React + TypeScript + Vite
+# KSP Crime Intelligence & Analytics Platform (CIAP)
 
-This template provides a minimal setup to get React working in Vite with HMR and some Oxlint rules.
+CIAP is a Zoho Catalyst-based crime intelligence platform for Karnataka Police.
+It combines an operational FIR backbone with analytics, forecasting, alerts, AI copilot workflows, and geospatial intelligence.
 
-Currently, two official plugins are available:
+## What Is In This Repo
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+- `src/` - React + TypeScript frontend
+- `backend/functions/` - Catalyst Functions / Express backend
+- `database/schema.sql` - Catalyst Data Store schema extension
+- `database/nosql-collections.json` - Catalyst NoSQL collection definitions
+- `backend/smartbrowz-templates/` - report templates for PDF generation
+- `.github/workflows/` - CI/CD pipeline for Catalyst deployment
 
-## React Compiler
+## Core Design Rules
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+- The Karnataka Police FIR ERD is the operational source of truth.
+- Existing FIR entities, relationships, foreign keys, and business rules must remain intact.
+- Analytics features are added as extension tables and NoSQL collections.
+- Stratus is used for files, scans, media, and generated documents.
+- Catalyst Cache is intended for dashboards, KPIs, heatmaps, and AI response caching.
 
-## Expanding the Oxlint configuration
+## Functional Areas
 
-If you are developing a production application, we recommend enabling type-aware lint rules by installing `oxlint-tsgolint` and editing `.oxlintrc.json`:
+- Command Center
+- Geo Heatmap
+- Crime Pattern Discovery
+- Risk Analysis
+- Forecasting
+- Link Analysis
+- Repeat Offender Intelligence
+- Modus Operandi Intelligence
+- Anomaly Detection
+- Investigation Timeline
+- Alerts Center
+- SCRB Reports
+- AI Copilot
+- Administration
+- Settings
 
-```json
-{
-  "$schema": "./node_modules/oxlint/configuration_schema.json",
-  "plugins": ["react", "typescript", "oxc"],
-  "options": {
-    "typeAware": true
-  },
-  "rules": {
-    "react/rules-of-hooks": "error",
-    "react/only-export-components": ["warn", { "allowConstantExport": true }]
-  }
-}
+## Backend Overview
+
+The backend is organized as Catalyst Functions with Express route modules:
+
+- `auth`
+- `crime` - read-only intelligence access over official `CaseMaster` FIR records
+- `alerts`
+- `forecasting`
+- `risk`
+- `ingestion`
+- `reports`
+- `ai`
+- `admin`
+
+## Data Layers
+
+### Catalyst Data Store
+
+Operational FIR and analytics tables live here. The repo currently includes:
+
+- official FIR ERD entities: `CaseMaster`, `ComplainantDetails`, `Victim`, `Accused`, `ArrestSurrender`, `Act`, `Section`, `CrimeHead`, `CrimeSubHead`, `District`, `State`, `Unit`, `Employee`, `Court`, `ChargesheetDetails`, and related masters
+- extension tables for predictions, forecasts, hotspots, explanations, patrol recommendations, resource allocation, audit, and model history
+
+### Catalyst NoSQL
+
+Used for:
+
+- link-analysis graphs
+- copilot conversations
+- investigation timelines
+- AI explanations
+- signal inbox records
+
+### Catalyst Stratus
+
+Used for:
+
+- evidence
+- CCTV
+- images
+- videos
+- FIR scans
+- OCR outputs
+- SmartBrowz-generated PDFs
+- attachments
+
+## Local Development
+
+```bash
+npm install
+npm run dev
 ```
 
-See the [Oxlint rules documentation](https://oxc.rs/docs/guide/usage/linter/rules) for the full list of rules and categories.
+Backend function package:
+
+```bash
+cd backend/functions
+npm install
+npm start
+```
+
+## Deployment
+
+The repository includes a Catalyst CI/CD workflow at:
+
+- `.github/workflows/catalyst-deploy.yml`
+
+## Notes
+
+- The current codebase is still a scaffold, not a finished production deployment.
+- Several backend modules already exist and should be wired to the final Catalyst services and the official FIR ERD.
+- The schema extension is intentionally additive so the operational database can remain stable.

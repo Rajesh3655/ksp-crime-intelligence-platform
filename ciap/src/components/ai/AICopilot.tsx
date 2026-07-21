@@ -49,7 +49,7 @@ const AICopilot: React.FC = () => {
   // Update greeting on lang change
   useEffect(() => {
     setMessages([{ id: '0', role: 'assistant', text: t('ai_greeting') }]);
-  }, [i18n.language]);
+  }, [i18n.language, t]);
 
   const sendMessage = (text: string) => {
     if (!text.trim()) return;

@@ -84,12 +84,6 @@ export const crimesAPI = {
 
   get: (id: number) => apiRequest(`/crimes/${id}`),
 
-  create: (data: Record<string, unknown>) =>
-    apiRequest('/crimes', { method: 'POST', body: JSON.stringify(data) }),
-
-  update: (id: number, data: Record<string, unknown>) =>
-    apiRequest(`/crimes/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
-
   heatmap: (params: Record<string, string> = {}) => {
     const qs = new URLSearchParams(params).toString();
     return apiRequest(`/crimes/geo/heatmap?${qs}`);
@@ -153,6 +147,48 @@ export const aiAPI = {
   sessions: () => apiRequest('/ai/sessions'),
 };
 
+// ── Intelligence API ─────────────────────────────────────────────────────────
+export const intelligenceAPI = {
+  analyzeCase: (caseMasterId: number) =>
+    apiRequest(`/intelligence/cases/${caseMasterId}/analyze`, { method: 'POST' }),
+
+  analyzeRecent: (limit = 50) =>
+    apiRequest('/intelligence/cases/analyze-recent', { method: 'POST', body: JSON.stringify({ limit }) }),
+
+  explainCase: (caseMasterId: number) =>
+    apiRequest(`/intelligence/cases/${caseMasterId}/explain`),
+
+  graph: (caseMasterId: number) =>
+    apiRequest(`/intelligence/graph/${caseMasterId}`),
+
+  recomputeRepeatOffenders: (limit = 50) =>
+    apiRequest('/intelligence/repeat-offenders/recompute', { method: 'POST', body: JSON.stringify({ limit }) }),
+
+  geoReplay: (params: { interval?: 'week' | 'month'; districtId?: number } = {}) => {
+    const qs = new URLSearchParams(params as Record<string, string>).toString();
+    return apiRequest(`/intelligence/geo/replay?${qs}`);
+  },
+
+  scrbBriefing: () => apiRequest('/intelligence/scrb/briefing'),
+};
+
+export const monitoringAPI = {
+  health: () => apiRequest('/monitoring/health'),
+};
+
+export const mlAPI = {
+  dashboard: () => apiRequest('/ml/dashboard'),
+  registry: () => apiRequest('/ml/registry'),
+  buildDataset: (limit = 5000) => apiRequest('/ml/datasets/build', { method: 'POST', body: JSON.stringify({ limit }) }),
+  train: (target = 'risk', limit = 5000) => apiRequest('/ml/train', { method: 'POST', body: JSON.stringify({ target, limit }) }),
+  promote: (modelRegistryId: number) => apiRequest(`/ml/registry/${modelRegistryId}/promote`, { method: 'POST' }),
+  checkDrift: (limit = 1000) => apiRequest('/ml/drift/check', { method: 'POST', body: JSON.stringify({ limit }) }),
+  feedback: (data: { caseMasterId?: number; findingId?: number; feedbackType: string; rating: number; comment?: string }) =>
+    apiRequest('/ml/feedback', { method: 'POST', body: JSON.stringify(data) }),
+  indexEmbeddings: (limit = 2000) => apiRequest('/ml/embeddings/index', { method: 'POST', body: JSON.stringify({ limit }) }),
+  vectorSearch: (q: string, limit = 10) => apiRequest(`/ml/vector-search?${new URLSearchParams({ q, limit: String(limit) })}`),
+};
+
 // ── Ingestion API ─────────────────────────────────────────────────────────────
 export const ingestionAPI = {
   uploadCSV: (file: File) => {
@@ -193,22 +229,6 @@ export const reportsAPI = {
   get: (id: number | string) => apiRequest(`/reports/${id}`),
 };
 
-// ── Citizen Reports API ───────────────────────────────────────────────────────
-export const citizenAPI = {
-  submit: (data: FormData) =>
-    apiRequest('/citizen', { method: 'POST', body: data, headers: {} }),
-
-  list:    (params: Record<string, string> = {}) => {
-    const qs = new URLSearchParams(params).toString();
-    return apiRequest(`/citizen?${qs}`);
-  },
-
-  verify:  (id: number) => apiRequest(`/citizen/${id}/verify`,  { method: 'POST' }),
-  reject:  (id: number, reason?: string) =>
-    apiRequest(`/citizen/${id}/reject`, { method: 'POST', body: JSON.stringify({ reason }) }),
-  convert: (id: number) => apiRequest(`/citizen/${id}/convert`, { method: 'POST' }),
-};
-
 // ── Admin API ─────────────────────────────────────────────────────────────────
 export const adminAPI = {
   users: {
@@ -241,9 +261,11 @@ export default {
   forecast:  forecastAPI,
   risk:      riskAPI,
   ai:        aiAPI,
+  intelligence: intelligenceAPI,
+  monitoring: monitoringAPI,
+  ml: mlAPI,
   ingestion: ingestionAPI,
   reports:   reportsAPI,
-  citizen:   citizenAPI,
   admin:     adminAPI,
   health,
 };

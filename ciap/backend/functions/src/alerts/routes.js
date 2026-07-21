@@ -1,156 +1,164 @@
 /**
  * Alerts Module
- * GET  /api/alerts         — list alerts (filtered)
- * GET  /api/alerts/:id     — single alert
- * POST /api/alerts/:id/acknowledge
- * POST /api/alerts/:id/escalate
- * POST /api/alerts/:id/resolve
- * POST /api/alerts/:id/assign
+ * Alerts are high-priority IntelligenceFinding records.
  */
 
 'use strict';
 
-const express  = require('express');
-const Joi      = require('joi');
+const express = require('express');
 const catalyst = require('catalyst-sdk');
 
 const { asyncHandler, sendSuccess, paginate } = require('../middleware/errors');
-const { requireRole }                         = require('../middleware/auth');
+const { requireRole } = require('../middleware/auth');
 
 const router = express.Router();
 
-// ── GET /api/alerts ───────────────────────────────────────────────────────────
+const severityToAlert = severity => ({
+  red: 'critical',
+  orange: 'high',
+  yellow: 'medium',
+  green: 'low',
+}[severity] || 'medium');
+
+const alertToSeverity = alert => ({
+  critical: 'red',
+  high: 'orange',
+  medium: 'yellow',
+  low: 'green',
+}[alert] || alert);
+
+const parseJson = value => {
+  if (!value || typeof value !== 'string') return value || {};
+  try { return JSON.parse(value); } catch { return {}; }
+};
+
+const normalizeAlert = row => {
+  const finding = row.IntelligenceFinding || row;
+  const explanation = parseJson(finding.Explanation);
+  return {
+    alertId: finding.FindingID,
+    type: finding.FindingType,
+    severity: severityToAlert(finding.Severity),
+    districtId: finding.DistrictID,
+    districtName: row.District?.DistrictName || row.district_name,
+    message: finding.Summary,
+    status: explanation.status || 'active',
+    assignedTo: explanation.assignedTo || null,
+    assignedName: explanation.assignedName || null,
+    confidence: Number(finding.ConfidencePct || 0),
+    createdAt: finding.CreatedAt,
+    explanation,
+  };
+};
+
 router.get('/', asyncHandler(async (req, res) => {
   const { page, perPage, offset } = paginate(req.query);
   const { status, severity, districtId } = req.query;
 
-  let where = ['1=1'];
-  if (status)     where.push(`a.status = '${status}'`);
-  if (severity)   where.push(`a.severity = '${severity}'`);
-  if (districtId) where.push(`a.district_id = ${parseInt(districtId)}`);
-
-  // District-scope enforcement
+  const where = ["f.FindingType IN ('alert','anomaly','hotspot','forecast','risk')"];
+  if (severity) where.push(`f.Severity = '${alertToSeverity(severity)}'`);
+  if (districtId) where.push(`f.DistrictID = ${parseInt(districtId, 10)}`);
   if (!['super_admin', 'scrb_analyst'].includes(req.user.role) && req.user.districtId) {
-    where.push(`a.district_id = ${req.user.districtId}`);
+    where.push(`f.DistrictID = ${parseInt(req.user.districtId, 10)}`);
   }
 
   try {
     const datastore = catalyst.datastore();
-    const [countResult, alerts] = await Promise.all([
-      datastore.table('Alert').query(`SELECT COUNT(*) AS total FROM Alert a WHERE ${where.join(' AND ')}`),
-      datastore.table('Alert').query(
-        `SELECT a.*, d.name_en AS district_name, u.full_name AS assigned_name
-         FROM Alert a
-         LEFT JOIN District d ON a.district_id = d.district_id
-         LEFT JOIN Users u    ON a.assigned_to = u.user_id
-         WHERE ${where.join(' AND ')}
-         ORDER BY
-           CASE a.severity WHEN 'critical' THEN 1 WHEN 'high' THEN 2 WHEN 'medium' THEN 3 ELSE 4 END,
-           a.created_at DESC
-         LIMIT ${perPage} OFFSET ${offset}`
-      ),
-    ]);
+    const rows = await datastore.table('IntelligenceFinding').query(
+      `SELECT f.*, d.DistrictName AS district_name
+       FROM IntelligenceFinding f
+       LEFT JOIN District d ON f.DistrictID = d.DistrictID
+       WHERE ${where.join(' AND ')}
+       ORDER BY CASE f.Severity WHEN 'red' THEN 1 WHEN 'orange' THEN 2 WHEN 'yellow' THEN 3 ELSE 4 END,
+                f.CreatedAt DESC
+       LIMIT ${perPage} OFFSET ${offset}`
+    ).catch(() => []);
 
-    const total = countResult[0]?.['COUNT(*)'] || 0;
-    sendSuccess(res, alerts.map(r => ({
-      alertId:      r.Alert.alert_id,
-      type:         r.Alert.alert_type,
-      severity:     r.Alert.severity,
-      districtId:   r.Alert.district_id,
-      districtName: r.District?.name_en,
-      message:      req.user.lang === 'kn' && r.Alert.message_kn ? r.Alert.message_kn : r.Alert.message,
-      status:       r.Alert.status,
-      assignedTo:   r.Alert.assigned_to,
-      assignedName: r.Users?.full_name,
-      createdAt:    r.Alert.created_at,
-    })), { total, page, perPage });
+    const alerts = rows.map(normalizeAlert).filter(alert => !status || alert.status === status);
+    sendSuccess(res, alerts, { total: alerts.length, page, perPage });
   } catch {
     sendSuccess(res, [], { total: 0, page, perPage, mock: true });
   }
 }));
 
-// ── POST /api/alerts/:id/acknowledge ─────────────────────────────────────────
 router.post('/:id/acknowledge', asyncHandler(async (req, res) => {
-  const alertId = parseInt(req.params.id);
+  const alertId = parseInt(req.params.id, 10);
   const datastore = catalyst.datastore();
-
-  await datastore.table('Alert').updateRow({
-    alert_id:        alertId,
-    status:          'acknowledged',
-    acknowledged_by: req.user.userId,
-    acknowledged_at: new Date().toISOString(),
+  await datastore.table('IntelligenceFinding').updateRow({
+    FindingID: alertId,
+    Explanation: {
+      status: 'acknowledged',
+      acknowledgedBy: req.user.userId,
+      acknowledgedAt: new Date().toISOString(),
+    },
   });
 
-  // Trigger Circuit step via Catalyst Circuits
-  try {
-    const circuits = catalyst.circuits();
-    await circuits.trigger('ALERT_ACKNOWLEDGED', {
-      alertId, acknowledgedBy: req.user.userId,
-      timestamp: new Date().toISOString(),
-    });
-  } catch (e) { console.error('Circuit trigger error:', e.message); }
+  await catalyst.circuits().trigger('ALERT_ACKNOWLEDGED', {
+    alertId,
+    acknowledgedBy: req.user.userId,
+    timestamp: new Date().toISOString(),
+  }).catch(e => console.error('Circuit trigger error:', e.message));
 
   sendSuccess(res, { alertId, status: 'acknowledged' });
 }));
 
-// ── POST /api/alerts/:id/escalate ─────────────────────────────────────────────
 router.post('/:id/escalate', requireRole('district_officer'), asyncHandler(async (req, res) => {
-  const alertId = parseInt(req.params.id);
-  const datastore = catalyst.datastore();
-
-  await datastore.table('Alert').updateRow({
-    alert_id: alertId,
-    severity: 'critical',
-    status:   'active',
+  const alertId = parseInt(req.params.id, 10);
+  await catalyst.datastore().table('IntelligenceFinding').updateRow({
+    FindingID: alertId,
+    Severity: 'red',
+    Explanation: {
+      status: 'active',
+      escalatedBy: req.user.userId,
+      escalatedAt: new Date().toISOString(),
+    },
   });
 
-  // Trigger escalation circuit
-  try {
-    const circuits = catalyst.circuits();
-    await circuits.trigger('ALERT_ESCALATED', {
-      alertId, escalatedBy: req.user.userId,
-      timestamp: new Date().toISOString(),
-    });
-  } catch (e) { console.error('Circuit trigger error:', e.message); }
+  await catalyst.circuits().trigger('ALERT_ESCALATED', {
+    alertId,
+    escalatedBy: req.user.userId,
+    timestamp: new Date().toISOString(),
+  }).catch(e => console.error('Circuit trigger error:', e.message));
 
   sendSuccess(res, { alertId, severity: 'critical', message: 'Alert escalated to critical' });
 }));
 
-// ── POST /api/alerts/:id/resolve ──────────────────────────────────────────────
 router.post('/:id/resolve', asyncHandler(async (req, res) => {
-  const alertId   = parseInt(req.params.id);
-  const datastore = catalyst.datastore();
-
-  await datastore.table('Alert').updateRow({
-    alert_id:    alertId,
-    status:      'resolved',
-    resolved_by: req.user.userId,
-    resolved_at: new Date().toISOString(),
+  const alertId = parseInt(req.params.id, 10);
+  await catalyst.datastore().table('IntelligenceFinding').updateRow({
+    FindingID: alertId,
+    Severity: 'green',
+    Explanation: {
+      status: 'resolved',
+      resolvedBy: req.user.userId,
+      resolvedAt: new Date().toISOString(),
+    },
   });
 
   sendSuccess(res, { alertId, status: 'resolved' });
 }));
 
-// ── POST /api/alerts/:id/assign ───────────────────────────────────────────────
 router.post('/:id/assign', requireRole('district_officer'), asyncHandler(async (req, res) => {
-  const alertId   = parseInt(req.params.id);
+  const alertId = parseInt(req.params.id, 10);
   const { userId } = req.body;
-
   if (!userId) return res.status(400).json({ success: false, error: 'userId is required' });
 
-  const datastore = catalyst.datastore();
-  await datastore.table('Alert').updateRow({ alert_id: alertId, assigned_to: parseInt(userId) });
+  await catalyst.datastore().table('IntelligenceFinding').updateRow({
+    FindingID: alertId,
+    Explanation: {
+      status: 'active',
+      assignedTo: parseInt(userId, 10),
+      assignedAt: new Date().toISOString(),
+      assignedBy: req.user.userId,
+    },
+  });
 
-  // Send push notification to assigned officer
-  try {
-    const push = catalyst.push();
-    await push.send({
-      to:      userId.toString(),
-      title:   'Alert Assigned',
-      message: `An alert has been assigned to you. Alert ID: ${alertId}`,
-      data:    { alertId, type: 'ALERT_ASSIGNMENT' },
-    });
-  } catch (e) { console.error('Push notification error:', e.message); }
+  await catalyst.push().send({
+    to: userId.toString(),
+    title: 'Intelligence Alert Assigned',
+    message: `An intelligence alert has been assigned to you. Alert ID: ${alertId}`,
+    data: { alertId, type: 'ALERT_ASSIGNMENT' },
+  }).catch(e => console.error('Push notification error:', e.message));
 
   sendSuccess(res, { alertId, assignedTo: userId });
 }));

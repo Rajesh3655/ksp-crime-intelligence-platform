@@ -83,7 +83,7 @@ router.post('/csv', requireRole('scrb_analyst'), upload.single('file'), asyncHan
       mimeType: req.file.mimetype,
     });
     storageUrl = fileObj.file_location;
-  } catch (e) {
+  } catch {
     console.error('Stratus upload failed:', e.message);
   }
 
@@ -108,7 +108,7 @@ router.post('/csv', requireRole('scrb_analyst'), upload.single('file'), asyncHan
       records: rows,
       uploadedBy: req.user.userId,
     });
-  } catch (e) {
+  } catch {
     console.error('Signal publish error:', e.message);
   }
 
@@ -185,7 +185,7 @@ router.post('/cctns', requireRole('scrb_analyst'), asyncHandler(async (req, res)
       syncType,
       estimatedDuration: '5–15 minutes',
     }, {}, 202);
-  } catch (e) {
+  } catch {
     // CCTNS not configured
     sendSuccess(res, {
       message: 'CCTNS connection not configured. Configure via Catalyst Connections.',
@@ -196,7 +196,7 @@ router.post('/cctns', requireRole('scrb_analyst'), asyncHandler(async (req, res)
 
 // ── GET /api/ingest/batches ───────────────────────────────────────────────────
 router.get('/batches', requireRole('scrb_analyst'), asyncHandler(async (req, res) => {
-  const { page, perPage, offset } = paginate(req.query);
+  const { perPage, offset } = paginate(req.query);
 
   const datastore = catalyst.datastore();
   const result = await datastore.table('IngestionBatch').query(

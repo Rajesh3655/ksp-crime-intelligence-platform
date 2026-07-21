@@ -1,7 +1,8 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Layers, Filter, ZoomIn, ZoomOut, Crosshair, Info } from 'lucide-react';
+import { Layers, Filter, ZoomIn, ZoomOut, Crosshair, Play, Pause, Route, Radar, PenTool } from 'lucide-react';
 import { DISTRICTS } from '../../data/mockData';
+import { geoReplayFrames, resourcePlan } from '../../data/intelligence';
 
 // Dynamic import for Leaflet (no SSR issues)
 let L: any = null;
@@ -25,9 +26,17 @@ const GeoHeatmap: React.FC = () => {
   const mapRef = useRef<HTMLDivElement>(null);
   const mapInstanceRef = useRef<any>(null);
   const [selectedDistrict, setSelectedDistrict] = useState<typeof DISTRICTS[0] | null>(null);
-  const [activeLayer, setActiveLayer] = useState<'density' | 'risk' | 'hotspot'>('risk');
+  const [activeLayer, setActiveLayer] = useState<'district' | 'station' | 'beat' | 'hotspot' | 'risk' | 'prediction' | 'repeat' | 'gang' | 'patrol' | 'resource'>('risk');
   const [crimeFilter, setCrimeFilter] = useState('all');
-  const [mapLoaded, setMapLoaded] = useState(false);
+  const [frame, setFrame] = useState(geoReplayFrames.length - 1);
+  const [playing, setPlaying] = useState(false);
+  const [radiusKm, setRadiusKm] = useState(8);
+
+  useEffect(() => {
+    if (!playing) return;
+    const id = window.setInterval(() => setFrame(f => (f + 1) % geoReplayFrames.length), 900);
+    return () => window.clearInterval(id);
+  }, [playing]);
 
   useEffect(() => {
     if (mapInstanceRef.current || !mapRef.current) return;
@@ -60,9 +69,9 @@ const GeoHeatmap: React.FC = () => {
       L.control.attribution({ position: 'bottomright', prefix: 'KSP CIAP' }).addTo(map);
 
       // Add district markers
-      DISTRICTS.forEach(district => {
+      geoReplayFrames[frame].points.forEach(district => {
         const color = getRiskColor(district.riskScore);
-        const size = Math.max(24, district.riskScore / 3);
+        const size = Math.max(24, activeLayer === 'prediction' ? district.prediction / 2.5 : district.riskScore / 3);
 
         const circleIcon = L.divIcon({
           html: `
@@ -99,7 +108,15 @@ const GeoHeatmap: React.FC = () => {
               </div>
               <div style="display:flex;justify-content:space-between;margin-bottom:4px;">
                 <span style="color:#94A3B8;font-size:12px;">Incidents MTD</span>
-                <strong style="font-size:12px;">${district.incidents.toLocaleString()}</strong>
+                <strong style="font-size:12px;">${district.count.toLocaleString()}</strong>
+              </div>
+              <div style="display:flex;justify-content:space-between;margin-bottom:4px;">
+                <span style="color:#94A3B8;font-size:12px;">Prediction</span>
+                <strong style="font-size:12px;">${district.prediction}%</strong>
+              </div>
+              <div style="display:flex;justify-content:space-between;margin-bottom:4px;">
+                <span style="color:#94A3B8;font-size:12px;">AI Recommendation</span>
+                <strong style="font-size:12px;">+${district.resources} patrols</strong>
               </div>
               <div style="height:4px;background:rgba(255,255,255,0.1);border-radius:4px;margin-top:10px;">
                 <div style="height:100%;width:${district.riskScore}%;background:${color};border-radius:4px;"></div>
@@ -114,7 +131,7 @@ const GeoHeatmap: React.FC = () => {
       });
 
       // Add a faint Karnataka boundary polygon (simplified)
-      const karnatakaCenter = L.circle([14.5, 75.7], {
+      L.circle([14.5, 75.7], {
         radius: 380000,
         color: 'rgba(59,130,246,0.3)',
         fillColor: 'rgba(59,130,246,0.03)',
@@ -124,7 +141,6 @@ const GeoHeatmap: React.FC = () => {
       }).addTo(map);
 
       mapInstanceRef.current = map;
-      setMapLoaded(true);
     });
 
     return () => {
@@ -133,7 +149,7 @@ const GeoHeatmap: React.FC = () => {
         mapInstanceRef.current = null;
       }
     };
-  }, []);
+  }, [activeLayer, frame]);
 
   return (
     <div style={{ height: 'calc(100vh - var(--topbar-height))', display: 'flex', overflow: 'hidden' }}>
@@ -149,7 +165,7 @@ const GeoHeatmap: React.FC = () => {
             <div className="card-title mb-3">
               <div className="flex items-center gap-2"><Layers size={12} /> {t('heatmap_layers')}</div>
             </div>
-            {(['density', 'risk', 'hotspot'] as const).map(layer => (
+            {(['district', 'station', 'beat', 'hotspot', 'risk', 'prediction', 'repeat', 'gang', 'patrol', 'resource'] as const).map(layer => (
               <div
                 key={layer}
                 className="flex items-center gap-2"
@@ -167,7 +183,7 @@ const GeoHeatmap: React.FC = () => {
                   {activeLayer === layer && <div style={{ width: 6, height: 6, background: '#fff', borderRadius: 1 }} />}
                 </div>
                 <span className="text-caption text-secondary" style={{ textTransform: 'capitalize' }}>
-                  {layer === 'density' ? t('heatmap_density') : layer === 'risk' ? t('heatmap_risk') : t('heatmap_hotspots')}
+                  {layer.replace('-', ' ')}
                 </span>
               </div>
             ))}
@@ -184,6 +200,28 @@ const GeoHeatmap: React.FC = () => {
               <option value="cybercrime">{t('crime_cybercrime')}</option>
               <option value="murder">{t('crime_murder')}</option>
             </select>
+          </div>
+
+          <div className="card card-sm" style={{ padding: '12px 16px', minWidth: 240 }}>
+            <div className="card-title mb-2">
+              <div className="flex items-center gap-2"><Play size={12} /> Timeline Replay</div>
+            </div>
+            <div className="flex items-center gap-2">
+              <button className="btn btn-secondary btn-icon btn-sm" onClick={() => setPlaying(p => !p)}>{playing ? <Pause size={13} /> : <Play size={13} />}</button>
+              <input className="range" type="range" min={0} max={geoReplayFrames.length - 1} value={frame} onChange={e => setFrame(Number(e.target.value))} />
+              <span className="text-caption text-muted">{geoReplayFrames[frame].frame}</span>
+            </div>
+            <div className="divider" style={{ margin: '10px 0' }} />
+            <div className="flex items-center gap-2">
+              <Radar size={12} />
+              <span className="text-caption text-muted">Radius search</span>
+              <input className="range" type="range" min={2} max={30} value={radiusKm} onChange={e => setRadiusKm(Number(e.target.value))} />
+              <span className="text-label">{radiusKm} km</span>
+            </div>
+            <div className="flex gap-2 mt-2">
+              <button className="btn btn-ghost btn-sm"><PenTool size={12} /> Polygon</button>
+              <button className="btn btn-ghost btn-sm"><Route size={12} /> Routes</button>
+            </div>
           </div>
 
           {/* Risk Legend */}
@@ -211,8 +249,18 @@ const GeoHeatmap: React.FC = () => {
           zIndex: 1000, pointerEvents: 'none',
         }}>
           <div className="card card-sm" style={{ padding: '8px 16px', textAlign: 'center' }}>
-            <div className="text-caption text-muted">{t('heatmap_title')} — Karnataka State</div>
+            <div className="text-caption text-muted">{t('heatmap_title')} · {activeLayer} · {geoReplayFrames[frame].frame}</div>
           </div>
+        </div>
+
+        <div className="map-intel-strip">
+          {resourcePlan.slice(0, 4).map(plan => (
+            <div key={plan.district} className="map-intel-pill">
+              <span className={`status-dot ${plan.priority === 'red' ? 'critical' : plan.priority === 'orange' ? 'high' : 'medium'}`} />
+              <span>{plan.district}</span>
+              <strong>{plan.officers} officers</strong>
+            </div>
+          ))}
         </div>
 
         {/* Leaflet Map */}

@@ -4,70 +4,44 @@
 // ============================================================
 
 /**
- * Circuit 1: New High-Severity FIR Workflow
+ * Circuit 1: New High-Severity CaseMaster Workflow
  * Trigger: Signal 'NEW_HIGH_SEVERITY_FIR'
  * Flow: FIR created → Create Alert → Notify → Assign Officer
  */
 module.exports.newHighSeverityFIR = async (context, args) => {
   const catalyst  = require('catalyst-sdk');
   const datastore = catalyst.datastore();
-  const mail      = catalyst.mail();
   const push      = catalyst.push();
+  const { analyzeCase } = require('../functions/src/services/intelligenceEngine');
 
-  const { firId, severity, districtId, crimeType, timestamp } = args;
+  const { caseMasterId, crimeNo, severity = 'high', districtId, crimeType, timestamp } = args;
 
   try {
-    // Step 1: Create Alert in DataStore
-    const alert = await datastore.table('Alert').insertRow({
-      alert_type:     `New ${severity.toUpperCase()} FIR`,
-      severity,
-      district_id:    districtId,
-      fir_id:         firId,
-      message:        `New ${severity} crime reported: ${crimeType}. Immediate review required.`,
-      message_kn:     `ಹೊಸ ${severity} ಅಪರಾಧ ವರದಿ: ${crimeType}. ತಕ್ಷಣದ ಪರಿಶೀಲನೆ ಅಗತ್ಯ.`,
-      status:         'active',
-      trigger_source: 'Catalyst Signals',
+    const finding = await datastore.table('IntelligenceFinding').insertRow({
+      CaseMasterID: caseMasterId,
+      DistrictID: districtId,
+      FindingType: 'alert',
+      Severity: severity === 'critical' ? 'red' : 'orange',
+      ConfidencePct: 95,
+      Summary: `New high-severity CaseMaster record ${crimeNo || caseMasterId}: ${crimeType}`,
+      Explanation: { crimeNo, crimeType, timestamp, triggerSource: 'Catalyst Signals' },
+      SupportingCases: [caseMasterId],
     });
 
-    // Step 2: Find district officer to notify
-    const officers = await datastore.table('Users').query(
-      `SELECT * FROM Users WHERE district_id = ${districtId} AND role IN ('district_officer', 'station_officer') AND status = 'active' LIMIT 3`
-    );
-
-    // Step 3: Send push notifications and emails
-    for (const row of officers) {
-      const officer = row.Users;
-      try {
-        await push.send({
-          to:      officer.user_id.toString(),
-          title:   `🚨 ${severity.toUpperCase()} Alert — New FIR`,
-          message: `${crimeType} reported. FIR #${firId}. Immediate action required.`,
-          data:    { alertId: alert.alert_id, firId, type: 'NEW_HIGH_SEVERITY_FIR' },
-        });
-
-        await mail.send({
-          from:    'alerts@ciap.ksp.gov.in',
-          to:      officer.email,
-          subject: `[CIAP ALERT] ${severity.toUpperCase()} — New FIR #${firId}`,
-          html: `
-            <p>Dear ${officer.full_name},</p>
-            <p>A new <strong>${severity}</strong> severity FIR has been registered.</p>
-            <ul>
-              <li><strong>FIR ID:</strong> ${firId}</li>
-              <li><strong>Crime Type:</strong> ${crimeType}</li>
-              <li><strong>Time:</strong> ${timestamp}</li>
-            </ul>
-            <p>Please log in to <a href="https://ciap.ksp.gov.in">CIAP</a> to take action.</p>
-            <p><small>This is an automated alert from KSP CIAP.</small></p>
-          `,
-        });
-      } catch (notifErr) {
-        console.error(`Notification failed for officer ${officer.user_id}:`, notifErr.message);
-      }
+    if (caseMasterId) {
+      await analyzeCase(caseMasterId).catch(error => {
+        console.error('Automatic intelligence analysis failed:', error.message);
+      });
     }
 
+    await push.send({
+      title: `${severity.toUpperCase()} Intelligence Alert`,
+      message: `${crimeType} reported. Case ${crimeNo || caseMasterId}. Review in CIAP.`,
+      data: { findingId: finding.FindingID, caseMasterId, type: 'NEW_HIGH_SEVERITY_CASE' },
+    }).catch(e => console.error('Push notification failed:', e.message));
+
     context.output = {
-      success: true, alertId: alert.alert_id, notified: officers.length,
+      success: true, findingId: finding.FindingID,
     };
   } catch (err) {
     console.error('Circuit newHighSeverityFIR error:', err);
@@ -82,7 +56,6 @@ module.exports.newHighSeverityFIR = async (context, args) => {
 module.exports.crimeSpike = async (context, args) => {
   const catalyst  = require('catalyst-sdk');
   const datastore = catalyst.datastore();
-  const push      = catalyst.push();
 
   const { districtId, crimeType, zScore, observedCount, expectedCount, detectedAt } = args;
 
@@ -91,35 +64,27 @@ module.exports.crimeSpike = async (context, args) => {
   const messageKn = `ಅಸಂಗತ ಪತ್ತೆ: ${crimeType} ಘಟನೆಗಳು ${observedCount} ನಿರೀಕ್ಷಿತ ${expectedCount} ವಿರುದ್ಧ.`;
 
   try {
-    // Create anomaly record in NoSQL
+    // Queue anomaly signal in NoSQL
     const nosql = catalyst.nosql();
-    await nosql.collection('AnomalyEvent').insert({
-      anomaly_id:      require('uuid').v4(),
-      detected_at:     detectedAt,
-      district_id:     districtId,
-      crime_type:      crimeType,
-      metric:          'incident_count_daily',
-      observed_value:  observedCount,
-      expected_value:  expectedCount,
-      z_score:         zScore,
-      sigma_threshold: 3,
-      alert_triggered: true,
-      explanation:     message,
-      status:          'new',
+    await nosql.collection('SignalInbox').insert({
+      signal_id: require('uuid').v4(),
+      source: 'anomaly',
+      priority: severity,
+      payload: { districtId, crimeType, zScore, observedCount, expectedCount, detectedAt },
+      status: 'received',
+      received_at: detectedAt,
     });
 
-    // Create alert
-    const alert = await datastore.table('Alert').insertRow({
-      alert_type:     'Crime Spike Anomaly',
-      severity,
-      district_id:    districtId,
-      message,
-      message_kn:     messageKn,
-      status:         'active',
-      trigger_source: 'Zia AutoML Anomaly Detection',
+    const finding = await datastore.table('IntelligenceFinding').insertRow({
+      DistrictID: districtId,
+      FindingType: 'anomaly',
+      Severity: severity === 'critical' ? 'red' : severity === 'high' ? 'orange' : 'yellow',
+      ConfidencePct: Math.min(99, Math.round(zScore * 25)),
+      Summary: message,
+      Explanation: { messageKn, crimeType, zScore, observedCount, expectedCount, detectedAt },
     });
 
-    context.output = { success: true, alertId: alert.alert_id, severity };
+    context.output = { success: true, findingId: finding.FindingID, severity };
   } catch (err) {
     console.error('Circuit crimeSpike error:', err);
     context.output = { success: false, error: err.message };
@@ -142,12 +107,13 @@ module.exports.cctnsSync = async (context, args) => {
 
   // Create sync log
   const nosql = catalyst.nosql();
-  await nosql.collection('CCTNSSyncLog').insert({
-    sync_id:    syncId,
-    sync_type:  syncType,
-    started_at: startedAt,
-    status:     'running',
-    triggered_by: args.triggeredBy || 'signal',
+  await nosql.collection('SignalInbox').insert({
+    signal_id: syncId,
+    source: 'fir',
+    priority: 'medium',
+    payload: { syncType, districtId, dateFrom, startedAt, triggeredBy: args.triggeredBy || 'signal' },
+    status: 'processing',
+    received_at: startedAt,
   });
 
   let stats = { fetched: 0, inserted: 0, updated: 0, failed: 0 };
@@ -167,26 +133,15 @@ module.exports.cctnsSync = async (context, args) => {
 
     for (const fir of firs) {
       try {
-        // Upsert into DataStore
-        const existing = await datastore.table('FIR').query(
-          `SELECT fir_id FROM FIR WHERE fir_number = '${fir.fir_no}' LIMIT 1`
-        );
-        if (existing?.length) {
-          await datastore.table('FIR').updateRow({ fir_id: existing[0].FIR.fir_id, status: fir.status });
-          stats.updated++;
-        } else {
-          await datastore.table('FIR').insertRow({
-            fir_number:    fir.fir_no,
-            crime_type:    fir.crime_type,
-            crime_category:fir.crime_category,
-            severity:      fir.severity || 'medium',
-            status:        fir.status || 'open',
-            incident_date: fir.incident_date,
-            description:   fir.description,
-            created_by:    1, // System user
-          });
-          stats.inserted++;
-        }
+        await datastore.table('IntelligenceFinding').insertRow({
+          FindingType: 'pattern',
+          Severity: 'yellow',
+          ConfidencePct: 75,
+          Summary: `CCTNS sync candidate received for ${fir.fir_no}`,
+          Explanation: { source: 'CCTNS', record: fir },
+          CreatedAt: new Date().toISOString(),
+        });
+        stats.inserted++;
       } catch (e) {
         stats.failed++;
         console.error(`Failed to sync FIR ${fir.fir_no}:`, e.message);
@@ -194,21 +149,18 @@ module.exports.cctnsSync = async (context, args) => {
     }
 
     // Update sync log
-    await nosql.collection('CCTNSSyncLog').update(syncId, {
-      completed_at:      new Date().toISOString(),
-      status:            stats.failed > 0 ? 'partial' : 'completed',
-      records_fetched:   stats.fetched,
-      records_inserted:  stats.inserted,
-      records_updated:   stats.updated,
-      records_failed:    stats.failed,
+    await nosql.collection('SignalInbox').update(syncId, {
+      processed_at: new Date().toISOString(),
+      status: stats.failed > 0 ? 'completed' : 'completed',
+      payload: { syncType, districtId, dateFrom, ...stats },
     });
 
     context.output = { success: true, syncId, ...stats };
 
   } catch (err) {
-    await nosql.collection('CCTNSSyncLog').update(syncId, {
-      status:     'failed',
-      errors:     [{ message: err.message }],
+    await nosql.collection('SignalInbox').update(syncId, {
+      status: 'failed',
+      error_message: err.message,
     }).catch(() => {});
 
     context.output = { success: false, syncId, error: err.message };
@@ -229,23 +181,20 @@ module.exports.processBatch = async (context, args) => {
 
   for (const record of (records || [])) {
     try {
-      if (!record.fir_number || !record.crime_type) {
-        errors.push({ record: record.fir_number || 'unknown', error: 'Missing required fields' });
+      if (!record.CaseMasterID && !record.CrimeNo) {
+        errors.push({ record: record.CrimeNo || 'unknown', error: 'Missing CaseMasterID or CrimeNo' });
         failed++;
         continue;
       }
 
-      await datastore.table('FIR').insertRow({
-        fir_number:    record.fir_number,
-        crime_type:    record.crime_type,
-        crime_category:record.crime_category || record.crime_type,
-        severity:      ['critical','high','medium','low'].includes(record.severity) ? record.severity : 'medium',
-        status:        ['open','pending','closed'].includes(record.status) ? record.status : 'open',
-        incident_date: record.incident_date,
-        description:   record.description || '',
-        lat:           record.lat ? parseFloat(record.lat) : null,
-        lng:           record.lng ? parseFloat(record.lng) : null,
-        created_by:    1,
+      await datastore.table('IntelligenceFinding').insertRow({
+        CaseMasterID: record.CaseMasterID || null,
+        FindingType: 'pattern',
+        Severity: 'yellow',
+        ConfidencePct: 70,
+        Summary: `Ingestion review candidate ${record.CrimeNo || record.CaseMasterID}`,
+        Explanation: { source, record },
+        SupportingCases: record.CaseMasterID ? [record.CaseMasterID] : [],
       });
       processed++;
     } catch (e) {
@@ -255,14 +204,81 @@ module.exports.processBatch = async (context, args) => {
   }
 
   // Update batch status
-  await datastore.table('IngestionBatch').updateRow({
-    batch_id:          batchId,
-    status:            failed > 0 ? (processed > 0 ? 'completed' : 'failed') : 'completed',
-    processed_records: processed,
-    failed_records:    failed,
-    error_log:         JSON.stringify(errors.slice(0, 50)),
-    completed_at:      new Date().toISOString(),
+  await datastore.table('IntelligenceFinding').insertRow({
+    FindingType: 'pattern',
+    Severity: failed > 0 ? 'orange' : 'green',
+    ConfidencePct: 80,
+    Summary: `Ingestion batch ${batchId} processed ${processed} records with ${failed} failures`,
+    Explanation: { batchId, source, processed, failed, errors: errors.slice(0, 50) },
   }).catch(() => {});
 
   context.output = { success: true, batchId, processed, failed, errors: errors.slice(0, 10) };
+};
+
+/**
+ * Circuit 5: Full Intelligence Pipeline
+ * New/updated FIR -> features -> risk -> graph -> prediction -> offender/gang -> notification -> SCRB update.
+ */
+module.exports.intelligencePipeline = async (context, args) => {
+  const catalyst = require('catalyst-sdk');
+  const { analyzeCase, generateRepeatOffenderProfiles } = require('../functions/src/services/intelligenceEngine');
+  const { caseMasterId, eventType = 'NEW_FIR' } = args;
+
+  try {
+    const analysis = await analyzeCase(caseMasterId);
+    if (!analysis) throw new Error(`CaseMaster ${caseMasterId} not found`);
+
+    const repeatProfiles = await generateRepeatOffenderProfiles(50);
+    const highRisk = analysis.intelligence.scores.riskScore >= 70;
+    if (highRisk) {
+      await catalyst.push().send({
+        title: 'Critical Intelligence',
+        message: `Case ${analysis.intelligence.crime_no || caseMasterId} risk ${analysis.intelligence.scores.riskScore}/100`,
+        data: { caseMasterId, eventType, route: '/link-analysis' },
+      }).catch(error => console.error('Push failed:', error.message));
+    }
+
+    await catalyst.signals().publish('SCRB_INTELLIGENCE_UPDATED', {
+      caseMasterId,
+      eventType,
+      riskScore: analysis.intelligence.scores.riskScore,
+      repeatProfiles: repeatProfiles.length,
+      updatedAt: new Date().toISOString(),
+    }).catch(error => console.error('SCRB signal failed:', error.message));
+
+    context.output = {
+      success: true,
+      caseMasterId,
+      riskScore: analysis.intelligence.scores.riskScore,
+      graphId: analysis.graph.graph_id,
+      repeatProfiles: repeatProfiles.length,
+      notified: highRisk,
+    };
+  } catch (error) {
+    console.error('Circuit intelligencePipeline error:', error);
+    context.output = { success: false, retryable: true, error: error.message };
+  }
+};
+
+/**
+ * Circuit 6: Drift Approval Workflow
+ * Drift detected -> candidate training -> shadow comparison -> promotion recommendation.
+ */
+module.exports.driftApprovalWorkflow = async (context, args) => {
+  const catalyst = require('catalyst-sdk');
+  const { trainCandidateModel } = require('../functions/src/services/mlLifecycle');
+  const { events = [] } = args;
+
+  try {
+    const candidate = await trainCandidateModel({ target: 'risk', limit: 5000, builtBy: 'drift-circuit' });
+    await catalyst.signals().publish('MODEL_APPROVAL_REQUIRED', {
+      driftEvents: events,
+      candidateModel: candidate.model,
+      dataset: candidate.dataset?.datasetVersion,
+      requestedAt: new Date().toISOString(),
+    }).catch(() => {});
+    context.output = { success: true, candidateStatus: candidate.status, approvalQueued: true };
+  } catch (error) {
+    context.output = { success: false, retryable: true, error: error.message };
+  }
 };

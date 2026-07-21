@@ -1,8 +1,9 @@
 import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Search, Bell, RefreshCw, ChevronRight } from 'lucide-react';
+import { Search, Bell, RefreshCw, ChevronRight, LogOut } from 'lucide-react';
 import { useLocation } from 'react-router-dom';
 import { ALERTS } from '../../data/mockData';
+import { useAuth } from '../../auth/useAuth';
 
 interface TopbarProps {
   onNotifClick?: () => void;
@@ -11,14 +12,12 @@ interface TopbarProps {
 const PAGE_TITLES: Record<string, { en: string; kn: string }> = {
   '/': { en: 'Dashboard', kn: 'ಡ್ಯಾಶ್‌ಬೋರ್ಡ್' },
   '/command-center': { en: 'Command Center', kn: 'ಕಮಾಂಡ್ ಸೆಂಟರ್' },
-  '/crimes': { en: 'Crime Management', kn: 'ಅಪರಾಧ ನಿರ್ವಹಣೆ' },
   '/heatmap': { en: 'Geo Heatmap', kn: 'ಭೂ ಉಷ್ಣ ನಕ್ಷೆ' },
   '/forecasting': { en: 'Forecasting', kn: 'ಮುನ್ಸೂಚನೆ' },
   '/risk': { en: 'Risk Analysis', kn: 'ಅಪಾಯ ವಿಶ್ಲೇಷಣೆ' },
   '/link-analysis': { en: 'Link Analysis', kn: 'ಲಿಂಕ್ ವಿಶ್ಲೇಷಣೆ' },
   '/alerts': { en: 'Alerts Center', kn: 'ಎಚ್ಚರಿಕೆ ಕೇಂದ್ರ' },
   '/ai-copilot': { en: 'AI Copilot', kn: 'ಎಐ ಸಹಾಯಕ' },
-  '/citizen-reports': { en: 'Citizen Reports', kn: 'ನಾಗರಿಕ ವರದಿಗಳು' },
   '/scrb-reports': { en: 'SCRB Reports', kn: 'ಎಸ್‌ಸಿಆರ್‌ಬಿ ವರದಿಗಳು' },
   '/administration': { en: 'Administration', kn: 'ಆಡಳಿತ' },
   '/settings': { en: 'Settings', kn: 'ಸೆಟ್ಟಿಂಗ್‌ಗಳು' },
@@ -27,8 +26,8 @@ const PAGE_TITLES: Record<string, { en: string; kn: string }> = {
 const Topbar: React.FC<TopbarProps> = ({ onNotifClick }) => {
   const { t, i18n } = useTranslation();
   const location = useLocation();
+  const { user, logout } = useAuth();
   const [searchVal, setSearchVal] = useState('');
-  const [lastRefresh, setLastRefresh] = useState('Just now');
 
   const criticalCount = ALERTS.filter(a => a.severity === 'critical' && a.status === 'active').length;
   const lang = i18n.language;
@@ -42,7 +41,7 @@ const Topbar: React.FC<TopbarProps> = ({ onNotifClick }) => {
   };
 
   const handleRefresh = () => {
-    setLastRefresh('Just now');
+    window.dispatchEvent(new CustomEvent('ciap:refresh'));
   };
 
   return (
@@ -82,7 +81,12 @@ const Topbar: React.FC<TopbarProps> = ({ onNotifClick }) => {
       </div>
 
       {/* Refresh */}
-      <button className="btn btn-ghost btn-icon btn-sm" onClick={handleRefresh} title="Refresh data" aria-label="Refresh">
+      <button
+        className="btn btn-ghost btn-icon btn-sm"
+        onClick={handleRefresh}
+        title="Refresh data"
+        aria-label="Refresh"
+      >
         <RefreshCw size={15} />
       </button>
 
@@ -138,13 +142,22 @@ const Topbar: React.FC<TopbarProps> = ({ onNotifClick }) => {
           cursor: 'pointer',
           flexShrink: 0,
         }}
-        title="Supt. Ramaiah K. — Super Admin"
+        title={`${String(user?.name || user?.full_name || 'User')} — ${String(user?.role || '')}`}
         role="button"
         tabIndex={0}
         aria-label="User profile"
       >
-        RK
+        {String((user?.name || user?.full_name || 'U')).slice(0, 2).toUpperCase()}
       </div>
+
+      <button
+        className="btn btn-ghost btn-icon btn-sm"
+        onClick={() => void logout()}
+        aria-label="Logout"
+        title="Logout"
+      >
+        <LogOut size={15} />
+      </button>
     </header>
   );
 };

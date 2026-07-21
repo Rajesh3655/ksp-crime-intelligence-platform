@@ -1,8 +1,8 @@
 import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ResponsiveContainer, RadarChart, Radar, PolarGrid, PolarAngleAxis, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip } from 'recharts';
-import { AlertTriangle, TrendingUp, TrendingDown, Minus, Filter } from 'lucide-react';
-import { RISK_SCORES, DISTRICTS } from '../../data/mockData';
+import { TrendingUp, TrendingDown, Minus, Filter } from 'lucide-react';
+import { RISK_SCORES } from '../../data/mockData';
 
 const TOOLTIP_STYLE = { background: 'var(--navy-800)', border: '1px solid var(--border-default)', borderRadius: 6, padding: '8px 12px', fontSize: 12, color: 'var(--text-primary)' };
 

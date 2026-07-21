@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Bot, Mic, Send, Globe, Bell, Shield, User, Key, RotateCcw, CheckCircle } from 'lucide-react';
+import { Globe, Bell, Shield, User, Key, CheckCircle } from 'lucide-react';
 
 const Settings: React.FC = () => {
   const { t, i18n } = useTranslation();

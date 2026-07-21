@@ -1,0 +1,961 @@
+{
+  "count": 50000,
+  "seed": 20260721,
+  "scenarios": [
+    {
+      "id": "A",
+      "title": "Festival Burglary Increase",
+      "outcome": "Predict hotspot, repeat offender, and 3-unit patrol recommendation.",
+      "cases": [
+        "Dasara",
+        "Burglary",
+        "Night-time MO"
+      ]
+    },
+    {
+      "id": "B",
+      "title": "Cyber Fraud Network",
+      "outcome": "Graph reveals shared associates and transaction pattern.",
+      "cases": [
+        "UPI Fraud",
+        "Investment Scam"
+      ]
+    },
+    {
+      "id": "C",
+      "title": "Narcotics Distribution",
+      "outcome": "Gang evolution timeline shows NH corridor expansion.",
+      "cases": [
+        "Drug Distribution",
+        "NH-167 Network"
+      ]
+    },
+    {
+      "id": "D",
+      "title": "Serial Offender",
+      "outcome": "Crime DNA matches multiple FIRs with same MO.",
+      "cases": [
+        "Vehicle Theft",
+        "Repeat offender"
+      ]
+    },
+    {
+      "id": "E",
+      "title": "Unexpected Anomaly",
+      "outcome": "Isolation Forest flags rare timing/location/officer workload combination.",
+      "cases": [
+        "Location anomaly",
+        "Officer workload"
+      ]
+    }
+  ],
+  "gangs": [
+    "Market Corridor Group",
+    "NH-167 Network",
+    "Coastal Fraud Cell",
+    "Ring Road Burglary Crew",
+    "North Belt Narcotics Line"
+  ],
+  "repeatOffenders": [
+    {
+      "id": 1,
+      "name": "Suresh Babu A1",
+      "gang": "NH-167 Network"
+    },
+    {
+      "id": 2,
+      "name": "Imran Pasha A2",
+      "gang": ""
+    },
+    {
+      "id": 3,
+      "name": "Manjunath S A3",
+      "gang": "North Belt Narcotics Line"
+    },
+    {
+      "id": 4,
+      "name": "Naveen H A4",
+      "gang": ""
+    },
+    {
+      "id": 5,
+      "name": "Manjunath S A5",
+      "gang": "Ring Road Burglary Crew"
+    },
+    {
+      "id": 6,
+      "name": "Imran Pasha A6",
+      "gang": "Ring Road Burglary Crew"
+    },
+    {
+      "id": 7,
+      "name": "Prakash Gowda A7",
+      "gang": ""
+    },
+    {
+      "id": 8,
+      "name": "Kiran R A8",
+      "gang": ""
+    },
+    {
+      "id": 9,
+      "name": "Naveen H A9",
+      "gang": ""
+    },
+    {
+      "id": 10,
+      "name": "Suresh Babu A10",
+      "gang": "NH-167 Network"
+    },
+    {
+      "id": 11,
+      "name": "Manjunath S A11",
+      "gang": ""
+    },
+    {
+      "id": 12,
+      "name": "Naveen H A12",
+      "gang": ""
+    },
+    {
+      "id": 13,
+      "name": "Manjunath S A13",
+      "gang": ""
+    },
+    {
+      "id": 14,
+      "name": "Prakash Gowda A14",
+      "gang": ""
+    },
+    {
+      "id": 15,
+      "name": "Arjun Nayak A15",
+      "gang": ""
+    },
+    {
+      "id": 16,
+      "name": "Manjunath S A16",
+      "gang": ""
+    },
+    {
+      "id": 17,
+      "name": "Arjun Nayak A17",
+      "gang": ""
+    },
+    {
+      "id": 18,
+      "name": "Naveen H A18",
+      "gang": ""
+    },
+    {
+      "id": 19,
+      "name": "Ravi Kumar A19",
+      "gang": "Market Corridor Group"
+    },
+    {
+      "id": 20,
+      "name": "Vijay Patil A20",
+      "gang": ""
+    },
+    {
+      "id": 21,
+      "name": "Kiran R A21",
+      "gang": ""
+    },
+    {
+      "id": 22,
+      "name": "Suresh Babu A22",
+      "gang": "Market Corridor Group"
+    },
+    {
+      "id": 23,
+      "name": "Manjunath S A23",
+      "gang": ""
+    },
+    {
+      "id": 24,
+      "name": "Arjun Nayak A24",
+      "gang": ""
+    },
+    {
+      "id": 25,
+      "name": "Prakash Gowda A25",
+      "gang": "North Belt Narcotics Line"
+    },
+    {
+      "id": 26,
+      "name": "Manjunath S A26",
+      "gang": "NH-167 Network"
+    },
+    {
+      "id": 27,
+      "name": "Suresh Babu A27",
+      "gang": "North Belt Narcotics Line"
+    },
+    {
+      "id": 28,
+      "name": "Ravi Kumar A28",
+      "gang": ""
+    },
+    {
+      "id": 29,
+      "name": "Prakash Gowda A29",
+      "gang": ""
+    },
+    {
+      "id": 30,
+      "name": "Imran Pasha A30",
+      "gang": "NH-167 Network"
+    },
+    {
+      "id": 31,
+      "name": "Prakash Gowda A31",
+      "gang": "Ring Road Burglary Crew"
+    },
+    {
+      "id": 32,
+      "name": "Kiran R A32",
+      "gang": ""
+    },
+    {
+      "id": 33,
+      "name": "Rizwan Khan A33",
+      "gang": "Coastal Fraud Cell"
+    },
+    {
+      "id": 34,
+      "name": "Vijay Patil A34",
+      "gang": "North Belt Narcotics Line"
+    },
+    {
+      "id": 35,
+      "name": "Arjun Nayak A35",
+      "gang": ""
+    },
+    {
+      "id": 36,
+      "name": "Prakash Gowda A36",
+      "gang": "Coastal Fraud Cell"
+    },
+    {
+      "id": 37,
+      "name": "Naveen H A37",
+      "gang": ""
+    },
+    {
+      "id": 38,
+      "name": "Kiran R A38",
+      "gang": "Ring Road Burglary Crew"
+    },
+    {
+      "id": 39,
+      "name": "Ravi Kumar A39",
+      "gang": ""
+    },
+    {
+      "id": 40,
+      "name": "Rizwan Khan A40",
+      "gang": "North Belt Narcotics Line"
+    },
+    {
+      "id": 41,
+      "name": "Vijay Patil A41",
+      "gang": ""
+    },
+    {
+      "id": 42,
+      "name": "Suresh Babu A42",
+      "gang": "NH-167 Network"
+    },
+    {
+      "id": 43,
+      "name": "Vijay Patil A43",
+      "gang": ""
+    },
+    {
+      "id": 44,
+      "name": "Naveen H A44",
+      "gang": ""
+    },
+    {
+      "id": 45,
+      "name": "Arjun Nayak A45",
+      "gang": "North Belt Narcotics Line"
+    },
+    {
+      "id": 46,
+      "name": "Arjun Nayak A46",
+      "gang": "Ring Road Burglary Crew"
+    },
+    {
+      "id": 47,
+      "name": "Rizwan Khan A47",
+      "gang": "North Belt Narcotics Line"
+    },
+    {
+      "id": 48,
+      "name": "Rizwan Khan A48",
+      "gang": ""
+    },
+    {
+      "id": 49,
+      "name": "Arjun Nayak A49",
+      "gang": ""
+    },
+    {
+      "id": 50,
+      "name": "Vijay Patil A50",
+      "gang": ""
+    },
+    {
+      "id": 51,
+      "name": "Suresh Babu A51",
+      "gang": ""
+    },
+    {
+      "id": 52,
+      "name": "Naveen H A52",
+      "gang": "Ring Road Burglary Crew"
+    },
+    {
+      "id": 53,
+      "name": "Prakash Gowda A53",
+      "gang": ""
+    },
+    {
+      "id": 54,
+      "name": "Arjun Nayak A54",
+      "gang": ""
+    },
+    {
+      "id": 55,
+      "name": "Vijay Patil A55",
+      "gang": "North Belt Narcotics Line"
+    },
+    {
+      "id": 56,
+      "name": "Rizwan Khan A56",
+      "gang": "Ring Road Burglary Crew"
+    },
+    {
+      "id": 57,
+      "name": "Imran Pasha A57",
+      "gang": "NH-167 Network"
+    },
+    {
+      "id": 58,
+      "name": "Imran Pasha A58",
+      "gang": ""
+    },
+    {
+      "id": 59,
+      "name": "Imran Pasha A59",
+      "gang": ""
+    },
+    {
+      "id": 60,
+      "name": "Rizwan Khan A60",
+      "gang": "North Belt Narcotics Line"
+    },
+    {
+      "id": 61,
+      "name": "Naveen H A61",
+      "gang": ""
+    },
+    {
+      "id": 62,
+      "name": "Suresh Babu A62",
+      "gang": "North Belt Narcotics Line"
+    },
+    {
+      "id": 63,
+      "name": "Rizwan Khan A63",
+      "gang": ""
+    },
+    {
+      "id": 64,
+      "name": "Naveen H A64",
+      "gang": ""
+    },
+    {
+      "id": 65,
+      "name": "Prakash Gowda A65",
+      "gang": "Ring Road Burglary Crew"
+    },
+    {
+      "id": 66,
+      "name": "Suresh Babu A66",
+      "gang": "North Belt Narcotics Line"
+    },
+    {
+      "id": 67,
+      "name": "Prakash Gowda A67",
+      "gang": ""
+    },
+    {
+      "id": 68,
+      "name": "Suresh Babu A68",
+      "gang": ""
+    },
+    {
+      "id": 69,
+      "name": "Imran Pasha A69",
+      "gang": ""
+    },
+    {
+      "id": 70,
+      "name": "Naveen H A70",
+      "gang": "NH-167 Network"
+    },
+    {
+      "id": 71,
+      "name": "Prakash Gowda A71",
+      "gang": ""
+    },
+    {
+      "id": 72,
+      "name": "Kiran R A72",
+      "gang": ""
+    },
+    {
+      "id": 73,
+      "name": "Naveen H A73",
+      "gang": ""
+    },
+    {
+      "id": 74,
+      "name": "Vijay Patil A74",
+      "gang": "Coastal Fraud Cell"
+    },
+    {
+      "id": 75,
+      "name": "Naveen H A75",
+      "gang": "NH-167 Network"
+    },
+    {
+      "id": 76,
+      "name": "Ravi Kumar A76",
+      "gang": ""
+    },
+    {
+      "id": 77,
+      "name": "Vijay Patil A77",
+      "gang": "Coastal Fraud Cell"
+    },
+    {
+      "id": 78,
+      "name": "Rizwan Khan A78",
+      "gang": ""
+    },
+    {
+      "id": 79,
+      "name": "Imran Pasha A79",
+      "gang": "North Belt Narcotics Line"
+    },
+    {
+      "id": 80,
+      "name": "Arjun Nayak A80",
+      "gang": ""
+    },
+    {
+      "id": 81,
+      "name": "Ravi Kumar A81",
+      "gang": "NH-167 Network"
+    },
+    {
+      "id": 82,
+      "name": "Arjun Nayak A82",
+      "gang": ""
+    },
+    {
+      "id": 83,
+      "name": "Imran Pasha A83",
+      "gang": ""
+    },
+    {
+      "id": 84,
+      "name": "Naveen H A84",
+      "gang": "NH-167 Network"
+    },
+    {
+      "id": 85,
+      "name": "Arjun Nayak A85",
+      "gang": ""
+    },
+    {
+      "id": 86,
+      "name": "Ravi Kumar A86",
+      "gang": ""
+    },
+    {
+      "id": 87,
+      "name": "Ravi Kumar A87",
+      "gang": "NH-167 Network"
+    },
+    {
+      "id": 88,
+      "name": "Naveen H A88",
+      "gang": "Coastal Fraud Cell"
+    },
+    {
+      "id": 89,
+      "name": "Naveen H A89",
+      "gang": "Market Corridor Group"
+    },
+    {
+      "id": 90,
+      "name": "Rizwan Khan A90",
+      "gang": "NH-167 Network"
+    },
+    {
+      "id": 91,
+      "name": "Kiran R A91",
+      "gang": "Coastal Fraud Cell"
+    },
+    {
+      "id": 92,
+      "name": "Suresh Babu A92",
+      "gang": "Market Corridor Group"
+    },
+    {
+      "id": 93,
+      "name": "Imran Pasha A93",
+      "gang": "Ring Road Burglary Crew"
+    },
+    {
+      "id": 94,
+      "name": "Rizwan Khan A94",
+      "gang": "North Belt Narcotics Line"
+    },
+    {
+      "id": 95,
+      "name": "Imran Pasha A95",
+      "gang": ""
+    },
+    {
+      "id": 96,
+      "name": "Suresh Babu A96",
+      "gang": ""
+    },
+    {
+      "id": 97,
+      "name": "Rizwan Khan A97",
+      "gang": ""
+    },
+    {
+      "id": 98,
+      "name": "Naveen H A98",
+      "gang": ""
+    },
+    {
+      "id": 99,
+      "name": "Manjunath S A99",
+      "gang": ""
+    },
+    {
+      "id": 100,
+      "name": "Rizwan Khan A100",
+      "gang": "Ring Road Burglary Crew"
+    },
+    {
+      "id": 101,
+      "name": "Rizwan Khan A101",
+      "gang": "Coastal Fraud Cell"
+    },
+    {
+      "id": 102,
+      "name": "Vijay Patil A102",
+      "gang": ""
+    },
+    {
+      "id": 103,
+      "name": "Arjun Nayak A103",
+      "gang": "Ring Road Burglary Crew"
+    },
+    {
+      "id": 104,
+      "name": "Suresh Babu A104",
+      "gang": ""
+    },
+    {
+      "id": 105,
+      "name": "Naveen H A105",
+      "gang": ""
+    },
+    {
+      "id": 106,
+      "name": "Arjun Nayak A106",
+      "gang": ""
+    },
+    {
+      "id": 107,
+      "name": "Prakash Gowda A107",
+      "gang": "North Belt Narcotics Line"
+    },
+    {
+      "id": 108,
+      "name": "Rizwan Khan A108",
+      "gang": "NH-167 Network"
+    },
+    {
+      "id": 109,
+      "name": "Vijay Patil A109",
+      "gang": "NH-167 Network"
+    },
+    {
+      "id": 110,
+      "name": "Vijay Patil A110",
+      "gang": "Ring Road Burglary Crew"
+    },
+    {
+      "id": 111,
+      "name": "Suresh Babu A111",
+      "gang": ""
+    },
+    {
+      "id": 112,
+      "name": "Imran Pasha A112",
+      "gang": ""
+    },
+    {
+      "id": 113,
+      "name": "Vijay Patil A113",
+      "gang": "NH-167 Network"
+    },
+    {
+      "id": 114,
+      "name": "Imran Pasha A114",
+      "gang": ""
+    },
+    {
+      "id": 115,
+      "name": "Arjun Nayak A115",
+      "gang": "NH-167 Network"
+    },
+    {
+      "id": 116,
+      "name": "Prakash Gowda A116",
+      "gang": "Ring Road Burglary Crew"
+    },
+    {
+      "id": 117,
+      "name": "Prakash Gowda A117",
+      "gang": ""
+    },
+    {
+      "id": 118,
+      "name": "Suresh Babu A118",
+      "gang": ""
+    },
+    {
+      "id": 119,
+      "name": "Rizwan Khan A119",
+      "gang": ""
+    },
+    {
+      "id": 120,
+      "name": "Prakash Gowda A120",
+      "gang": "Market Corridor Group"
+    },
+    {
+      "id": 121,
+      "name": "Kiran R A121",
+      "gang": ""
+    },
+    {
+      "id": 122,
+      "name": "Manjunath S A122",
+      "gang": ""
+    },
+    {
+      "id": 123,
+      "name": "Vijay Patil A123",
+      "gang": ""
+    },
+    {
+      "id": 124,
+      "name": "Arjun Nayak A124",
+      "gang": "North Belt Narcotics Line"
+    },
+    {
+      "id": 125,
+      "name": "Kiran R A125",
+      "gang": "Coastal Fraud Cell"
+    },
+    {
+      "id": 126,
+      "name": "Prakash Gowda A126",
+      "gang": ""
+    },
+    {
+      "id": 127,
+      "name": "Manjunath S A127",
+      "gang": "NH-167 Network"
+    },
+    {
+      "id": 128,
+      "name": "Vijay Patil A128",
+      "gang": ""
+    },
+    {
+      "id": 129,
+      "name": "Imran Pasha A129",
+      "gang": "Coastal Fraud Cell"
+    },
+    {
+      "id": 130,
+      "name": "Manjunath S A130",
+      "gang": ""
+    },
+    {
+      "id": 131,
+      "name": "Imran Pasha A131",
+      "gang": ""
+    },
+    {
+      "id": 132,
+      "name": "Kiran R A132",
+      "gang": "Coastal Fraud Cell"
+    },
+    {
+      "id": 133,
+      "name": "Kiran R A133",
+      "gang": "Coastal Fraud Cell"
+    },
+    {
+      "id": 134,
+      "name": "Naveen H A134",
+      "gang": ""
+    },
+    {
+      "id": 135,
+      "name": "Rizwan Khan A135",
+      "gang": "North Belt Narcotics Line"
+    },
+    {
+      "id": 136,
+      "name": "Kiran R A136",
+      "gang": "Market Corridor Group"
+    },
+    {
+      "id": 137,
+      "name": "Rizwan Khan A137",
+      "gang": "Coastal Fraud Cell"
+    },
+    {
+      "id": 138,
+      "name": "Prakash Gowda A138",
+      "gang": "North Belt Narcotics Line"
+    },
+    {
+      "id": 139,
+      "name": "Manjunath S A139",
+      "gang": "NH-167 Network"
+    },
+    {
+      "id": 140,
+      "name": "Vijay Patil A140",
+      "gang": "Ring Road Burglary Crew"
+    },
+    {
+      "id": 141,
+      "name": "Vijay Patil A141",
+      "gang": ""
+    },
+    {
+      "id": 142,
+      "name": "Prakash Gowda A142",
+      "gang": ""
+    },
+    {
+      "id": 143,
+      "name": "Prakash Gowda A143",
+      "gang": "Ring Road Burglary Crew"
+    },
+    {
+      "id": 144,
+      "name": "Imran Pasha A144",
+      "gang": "NH-167 Network"
+    },
+    {
+      "id": 145,
+      "name": "Vijay Patil A145",
+      "gang": ""
+    },
+    {
+      "id": 146,
+      "name": "Naveen H A146",
+      "gang": ""
+    },
+    {
+      "id": 147,
+      "name": "Ravi Kumar A147",
+      "gang": ""
+    },
+    {
+      "id": 148,
+      "name": "Rizwan Khan A148",
+      "gang": "North Belt Narcotics Line"
+    },
+    {
+      "id": 149,
+      "name": "Ravi Kumar A149",
+      "gang": "Coastal Fraud Cell"
+    },
+    {
+      "id": 150,
+      "name": "Prakash Gowda A150",
+      "gang": "NH-167 Network"
+    },
+    {
+      "id": 151,
+      "name": "Manjunath S A151",
+      "gang": "NH-167 Network"
+    },
+    {
+      "id": 152,
+      "name": "Arjun Nayak A152",
+      "gang": ""
+    },
+    {
+      "id": 153,
+      "name": "Arjun Nayak A153",
+      "gang": "North Belt Narcotics Line"
+    },
+    {
+      "id": 154,
+      "name": "Arjun Nayak A154",
+      "gang": ""
+    },
+    {
+      "id": 155,
+      "name": "Prakash Gowda A155",
+      "gang": ""
+    },
+    {
+      "id": 156,
+      "name": "Ravi Kumar A156",
+      "gang": ""
+    },
+    {
+      "id": 157,
+      "name": "Vijay Patil A157",
+      "gang": "NH-167 Network"
+    },
+    {
+      "id": 158,
+      "name": "Suresh Babu A158",
+      "gang": "Coastal Fraud Cell"
+    },
+    {
+      "id": 159,
+      "name": "Arjun Nayak A159",
+      "gang": "NH-167 Network"
+    },
+    {
+      "id": 160,
+      "name": "Kiran R A160",
+      "gang": ""
+    },
+    {
+      "id": 161,
+      "name": "Prakash Gowda A161",
+      "gang": "Coastal Fraud Cell"
+    },
+    {
+      "id": 162,
+      "name": "Arjun Nayak A162",
+      "gang": "Coastal Fraud Cell"
+    },
+    {
+      "id": 163,
+      "name": "Naveen H A163",
+      "gang": ""
+    },
+    {
+      "id": 164,
+      "name": "Imran Pasha A164",
+      "gang": ""
+    },
+    {
+      "id": 165,
+      "name": "Vijay Patil A165",
+      "gang": "Coastal Fraud Cell"
+    },
+    {
+      "id": 166,
+      "name": "Imran Pasha A166",
+      "gang": "Coastal Fraud Cell"
+    },
+    {
+      "id": 167,
+      "name": "Prakash Gowda A167",
+      "gang": ""
+    },
+    {
+      "id": 168,
+      "name": "Vijay Patil A168",
+      "gang": "North Belt Narcotics Line"
+    },
+    {
+      "id": 169,
+      "name": "Ravi Kumar A169",
+      "gang": "Market Corridor Group"
+    },
+    {
+      "id": 170,
+      "name": "Prakash Gowda A170",
+      "gang": ""
+    },
+    {
+      "id": 171,
+      "name": "Imran Pasha A171",
+      "gang": "North Belt Narcotics Line"
+    },
+    {
+      "id": 172,
+      "name": "Vijay Patil A172",
+      "gang": "Coastal Fraud Cell"
+    },
+    {
+      "id": 173,
+      "name": "Kiran R A173",
+      "gang": "NH-167 Network"
+    },
+    {
+      "id": 174,
+      "name": "Kiran R A174",
+      "gang": ""
+    },
+    {
+      "id": 175,
+      "name": "Naveen H A175",
+      "gang": ""
+    },
+    {
+      "id": 176,
+      "name": "Ravi Kumar A176",
+      "gang": ""
+    },
+    {
+      "id": 177,
+      "name": "Suresh Babu A177",
+      "gang": "Coastal Fraud Cell"
+    },
+    {
+      "id": 178,
+      "name": "Rizwan Khan A178",
+      "gang": ""
+    },
+    {
+      "id": 179,
+      "name": "Ravi Kumar A179",
+      "gang": "Ring Road Burglary Crew"
+    },
+    {
+      "id": 180,
+      "name": "Suresh Babu A180",
+      "gang": "Coastal Fraud Cell"
+    }
+  ]
+}

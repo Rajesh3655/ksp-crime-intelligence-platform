@@ -28,34 +28,31 @@ const reportSchema = Joi.object({
 
 // ── GET /api/reports ──────────────────────────────────────────────────────────
 router.get('/', asyncHandler(async (req, res) => {
-  const { page, perPage, offset } = paginate(req.query);
+  const { perPage, offset } = paginate(req.query);
 
   try {
     const datastore = catalyst.datastore();
-    const result    = await datastore.table('GeneratedReport').query(
-      `SELECT gr.*, d.name_en AS district_name, u.full_name AS requester_name
-       FROM GeneratedReport gr
-       LEFT JOIN District d ON gr.district_id = d.district_id
-       LEFT JOIN Users u    ON gr.requested_by = u.user_id
-       ORDER BY gr.created_at DESC
+    const result    = await datastore.table('GeneratedIntelligenceReport').query(
+      `SELECT gr.*, d.DistrictName AS district_name
+       FROM GeneratedIntelligenceReport gr
+       LEFT JOIN District d ON gr.DistrictID = d.DistrictID
+       ORDER BY gr.CreatedAt DESC
        LIMIT ${perPage} OFFSET ${offset}`
     );
 
     sendSuccess(res, result.map(r => ({
-      reportId:      r.GeneratedReport.report_id,
-      name:          r.GeneratedReport.report_name,
-      type:          r.GeneratedReport.report_type,
-      districtId:    r.GeneratedReport.district_id,
-      districtName:  r.District?.name_en || 'All Districts',
-      periodStart:   r.GeneratedReport.period_start,
-      periodEnd:     r.GeneratedReport.period_end,
-      status:        r.GeneratedReport.status,
-      pdfUrl:        r.GeneratedReport.pdf_url,
-      excelUrl:      r.GeneratedReport.excel_url,
-      fileSizeBytes: r.GeneratedReport.file_size_bytes,
-      requestedBy:   r.Users?.full_name,
-      completedAt:   r.GeneratedReport.completed_at,
-      createdAt:     r.GeneratedReport.created_at,
+      reportId:      r.GeneratedIntelligenceReport.ReportID,
+      name:          `${r.GeneratedIntelligenceReport.ReportType} Report`,
+      type:          r.GeneratedIntelligenceReport.ReportType,
+      districtId:    r.GeneratedIntelligenceReport.DistrictID,
+      districtName:  r.District?.DistrictName || r.district_name || 'All Districts',
+      periodStart:   r.GeneratedIntelligenceReport.PeriodStart,
+      periodEnd:     r.GeneratedIntelligenceReport.PeriodEnd,
+      status:        r.GeneratedIntelligenceReport.Status,
+      pdfUrl:        r.GeneratedIntelligenceReport.StratusObjectKey,
+      smartBrowzJob: r.GeneratedIntelligenceReport.SmartBrowzJobID,
+      requestedBy:   r.GeneratedIntelligenceReport.RequestedBy,
+      createdAt:     r.GeneratedIntelligenceReport.CreatedAt,
     })));
   } catch {
     sendSuccess(res, [], { mock: true });
@@ -67,7 +64,7 @@ router.post('/generate', requireRole('scrb_analyst'), asyncHandler(async (req, r
   const { error, value } = reportSchema.validate(req.body);
   if (error) return res.status(400).json({ success: false, error: error.details[0].message });
 
-  const { reportType, districtId, periodStart, periodEnd, language, sections } = value;
+  const { reportType, districtId, periodStart, periodEnd, language } = value;
 
   // Generate report name
   const districtName = districtId ? `District ${districtId}` : 'Karnataka State';
@@ -78,16 +75,15 @@ router.post('/generate', requireRole('scrb_analyst'), asyncHandler(async (req, r
   let reportId;
   try {
     const datastore = catalyst.datastore();
-    const newRecord = await datastore.table('GeneratedReport').insertRow({
-      report_name:  reportName,
-      report_type:  reportType,
-      district_id:  districtId || null,
-      period_start: periodStart,
-      period_end:   periodEnd,
-      status:       'queued',
-      requested_by: req.user.userId,
+    const newRecord = await datastore.table('GeneratedIntelligenceReport').insertRow({
+      ReportType: reportType.toUpperCase() === 'SCRB' ? 'SCRB' : reportType,
+      DistrictID: districtId || null,
+      PeriodStart: periodStart,
+      PeriodEnd: periodEnd,
+      Status: 'queued',
+      RequestedBy: req.user.catalystUid || null,
     });
-    reportId = newRecord.report_id;
+    reportId = newRecord.ReportID;
   } catch {
     reportId = uuidv4();
   }
@@ -126,13 +122,11 @@ router.post('/generate', requireRole('scrb_analyst'), asyncHandler(async (req, r
 
     // Update record as ready
     const datastore = catalyst.datastore();
-    await datastore.table('GeneratedReport').updateRow({
-      report_id:      reportId,
-      status:         'ready',
-      pdf_url:        uploaded.file_location,
-      file_size_bytes:pdfJob.pdf.length,
-      completed_at:   new Date().toISOString(),
-      smartbrowz_job: pdfJob.job_id,
+    await datastore.table('GeneratedIntelligenceReport').updateRow({
+      ReportID: reportId,
+      Status: 'ready',
+      StratusObjectKey: uploaded.file_location,
+      SmartBrowzJobID: pdfJob.job_id,
     });
 
     sendSuccess(res, {
@@ -168,12 +162,12 @@ router.post('/generate', requireRole('scrb_analyst'), asyncHandler(async (req, r
 router.get('/:id', asyncHandler(async (req, res) => {
   const reportId = req.params.id;
   const datastore = catalyst.datastore();
-  const result = await datastore.table('GeneratedReport').query(
-    `SELECT * FROM GeneratedReport WHERE report_id = '${reportId}' LIMIT 1`
+  const result = await datastore.table('GeneratedIntelligenceReport').query(
+    `SELECT * FROM GeneratedIntelligenceReport WHERE ReportID = '${reportId}' LIMIT 1`
   ).catch(() => []);
 
   if (!result?.length) return res.status(404).json({ success: false, error: 'Report not found' });
-  sendSuccess(res, result[0].GeneratedReport);
+  sendSuccess(res, result[0].GeneratedIntelligenceReport);
 }));
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -187,23 +181,23 @@ const REPORT_TYPE_LABELS = {
 
 const aggregateReportData = async (params) => {
   const { districtId, periodStart, periodEnd } = params;
-  const where = `WHERE f.incident_date BETWEEN '${periodStart}' AND '${periodEnd}'
-    ${districtId ? `AND f.district_id = ${districtId}` : ''}`;
+  const where = `WHERE cm.CrimeRegisteredDate BETWEEN '${periodStart}' AND '${periodEnd}'
+    ${districtId ? `AND u.DistrictID = ${districtId}` : ''}`;
 
   try {
     const datastore = catalyst.datastore();
     const [summary, byType, byStatus, topDistricts] = await Promise.all([
-      datastore.table('FIR').query(
-        `SELECT COUNT(*) AS total, SUM(CASE WHEN status='closed' THEN 1 ELSE 0 END) AS closed FROM FIR f ${where}`
+      datastore.table('CaseMaster').query(
+        `SELECT COUNT(*) AS total FROM CaseMaster cm LEFT JOIN Unit u ON cm.PoliceStationID = u.UnitID ${where}`
       ),
-      datastore.table('FIR').query(
-        `SELECT crime_type, COUNT(*) AS count FROM FIR f ${where} GROUP BY crime_type ORDER BY count DESC LIMIT 10`
+      datastore.table('CaseMaster').query(
+        `SELECT ch.CrimeGroupName, COUNT(*) AS count FROM CaseMaster cm LEFT JOIN Unit u ON cm.PoliceStationID = u.UnitID LEFT JOIN CrimeHead ch ON cm.CrimeMajorHeadID = ch.CrimeHeadID ${where} GROUP BY ch.CrimeGroupName ORDER BY count DESC LIMIT 10`
       ),
-      datastore.table('FIR').query(
-        `SELECT status, COUNT(*) AS count FROM FIR f ${where} GROUP BY status`
+      datastore.table('CaseMaster').query(
+        `SELECT cs.CaseStatusName, COUNT(*) AS count FROM CaseMaster cm LEFT JOIN Unit u ON cm.PoliceStationID = u.UnitID LEFT JOIN CaseStatusMaster cs ON cm.CaseStatusID = cs.CaseStatusID ${where} GROUP BY cs.CaseStatusName`
       ),
-      datastore.table('FIR').query(
-        `SELECT d.name_en, COUNT(*) AS count FROM FIR f LEFT JOIN District d ON f.district_id = d.district_id ${where} GROUP BY f.district_id ORDER BY count DESC LIMIT 5`
+      datastore.table('CaseMaster').query(
+        `SELECT d.DistrictName, COUNT(*) AS count FROM CaseMaster cm LEFT JOIN Unit u ON cm.PoliceStationID = u.UnitID LEFT JOIN District d ON u.DistrictID = d.DistrictID ${where} GROUP BY d.DistrictID ORDER BY count DESC LIMIT 5`
       ),
     ]);
     return { summary: summary[0], byType, byStatus, topDistricts };

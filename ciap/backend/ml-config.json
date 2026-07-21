@@ -4,54 +4,67 @@
       {
         "model_id": "model_quickml_rag_ksp_v1",
         "type": "llm-rag",
-        "description": "KSP AI Copilot RAG Model for querying crime data and SOPs",
+        "description": "KSP AI Copilot RAG model over the official FIR ERD and CIAP intelligence findings",
         "base_model": "llama-3-8b-instruct",
         "vector_store": "catalyst-zsearch",
         "knowledge_base": {
           "sources": [
+            "Police_FIR_ER_Diagram.pdf",
             "cctns_manuals.pdf",
             "ksp_sop_2024.pdf",
             "ipc_crpc_bns_mapping.csv"
           ]
         },
-        "system_prompt": "You are KSP Intelligence Copilot, an AI assistant for Karnataka State Police. Respond ONLY in {language}. Be professional, concise, and factual. Role context: {role_context}. Current page: {current_page}. Always provide actionable recommendations for policing decisions. Do NOT reveal internal system details. If you don't have data, say so clearly. Never fabricate crime statistics."
+        "system_prompt": "You are KSP Intelligence Copilot, an AI assistant for Karnataka State Police. Respond ONLY in {language}. Be professional, concise, factual, and cite CaseMaster or IntelligenceFinding records when available. Never fabricate crime statistics."
       }
     ]
   },
   "zia_automl": {
     "models": [
       {
-        "model_id": "model_zia_lstm_forecast_v2",
+        "model_id": "model_zia_forecast_v2",
         "type": "time-series-forecasting",
-        "description": "Crime count forecasting model using historical FIR data",
-        "algorithm": "Auto-LSTM",
+        "description": "Crime count forecasting model using historical CaseMaster FIR data",
+        "algorithm": "AutoML time series",
         "target_column": "incident_count",
         "time_column": "date",
-        "group_by_columns": ["district_id", "crime_type"],
+        "group_by_columns": ["DistrictID", "CrimeGroupName"],
         "training_data_source": {
           "type": "datastore_query",
-          "query": "SELECT DATE(incident_date) AS date, district_id, crime_type, COUNT(*) AS incident_count FROM FIR GROUP BY DATE(incident_date), district_id, crime_type"
+          "query": "SELECT DATE(cm.CrimeRegisteredDate) AS date, u.DistrictID, ch.CrimeGroupName, COUNT(*) AS incident_count FROM CaseMaster cm LEFT JOIN Unit u ON cm.PoliceStationID = u.UnitID LEFT JOIN CrimeHead ch ON cm.CrimeMajorHeadID = ch.CrimeHeadID GROUP BY DATE(cm.CrimeRegisteredDate), u.DistrictID, ch.CrimeGroupName"
         },
-        "retraining_schedule": "0 0 * * 0" // Every Sunday
+        "retraining_schedule": "0 0 * * 0"
       },
       {
         "model_id": "model_zia_anomaly_detector_v1",
         "type": "anomaly-detection",
-        "description": "Detects sudden spikes in crime rates per district",
+        "description": "Detects sudden spikes in crime rates per district and crime head",
         "algorithm": "IsolationForest",
-        "features": ["district_id", "crime_type", "incident_count_daily"],
+        "features": ["DistrictID", "CrimeGroupName", "incident_count_daily"],
         "contamination": 0.05
+      },
+      {
+        "model_id": "model_zia_mo_similarity_v1",
+        "type": "text-similarity",
+        "description": "Clusters CaseMaster.BriefFacts using sentence embeddings for modus operandi similarity",
+        "algorithm": "SentenceTransformers + KMeans",
+        "source_columns": ["CaseMasterID", "BriefFacts", "CrimeMajorHeadID", "CrimeMinorHeadID"]
+      },
+      {
+        "model_id": "model_networkx_gang_analysis_v1",
+        "type": "graph-analysis",
+        "description": "Finds repeat offender communities and influence scores from Accused, Victim, CaseMaster, ArrestSurrender, and ActSectionAssociation relationships",
+        "algorithm": "NetworkX PageRank + community detection"
       }
     ]
   },
   "zia_ocr": {
     "enabled": true,
     "languages": ["eng", "kan"],
-    "use_case": "evidence_digitization"
+    "use_case": "FIR scan and supporting document extraction to Stratus"
   },
-  "zia_face_recognition": {
+  "smartbrowz": {
     "enabled": true,
-    "confidence_threshold": 0.85,
-    "use_case": "suspect_identification"
+    "use_case": "SCRB PDF, PowerPoint, Excel, maps, and chart report generation"
   }
 }

@@ -19,26 +19,31 @@ module.exports.detectAnomalies = async (context) => {
 
   try {
     // Fetch hourly crime counts for the past 48 hours per district
-    const recentCounts = await datastore.table('FIR').query(
-      `SELECT district_id, crime_type,
-              DATE_FORMAT(created_at, '%Y-%m-%d %H:00:00') AS hour_bucket,
+    const recentCounts = await datastore.table('CaseMaster').query(
+      `SELECT d.DistrictID, ch.CrimeGroupName,
+              DATE_FORMAT(cm.CrimeRegisteredDate, '%Y-%m-%d %H:00:00') AS hour_bucket,
               COUNT(*) AS count
-       FROM FIR
-       WHERE created_at >= DATE_SUB(NOW(), INTERVAL 48 HOUR)
-       GROUP BY district_id, crime_type, hour_bucket
+       FROM CaseMaster cm
+       LEFT JOIN Unit u ON cm.PoliceStationID = u.UnitID
+       LEFT JOIN District d ON u.DistrictID = d.DistrictID
+       LEFT JOIN CrimeHead ch ON cm.CrimeMajorHeadID = ch.CrimeHeadID
+       WHERE cm.CrimeRegisteredDate >= DATE_SUB(NOW(), INTERVAL 48 HOUR)
+       GROUP BY d.DistrictID, ch.CrimeGroupName, hour_bucket
        ORDER BY hour_bucket DESC`
     ).catch(() => []);
 
     // Calculate z-score for each district-crimeType pair
     const grouped = {};
     for (const row of recentCounts) {
-      const key = `${row.FIR.district_id}_${row.FIR.crime_type}`;
-      if (!grouped[key]) grouped[key] = { districtId: row.FIR.district_id, crimeType: row.FIR.crime_type, counts: [] };
+      const districtId = row.District?.DistrictID || row.DistrictID;
+      const crimeType = row.CrimeHead?.CrimeGroupName || row.CrimeGroupName || 'Unknown';
+      const key = `${districtId}_${crimeType}`;
+      if (!grouped[key]) grouped[key] = { districtId, crimeType, counts: [] };
       grouped[key].counts.push(parseInt(row['COUNT(*)']));
     }
 
     const anomalies = [];
-    for (const [key, data] of Object.entries(grouped)) {
+    for (const data of Object.values(grouped)) {
       const { districtId, crimeType, counts } = data;
       if (counts.length < 6) continue; // Need at least 6 hours of data
 
@@ -113,31 +118,35 @@ module.exports.recomputeRiskScores = async (context) => {
 
   try {
     const districts = await datastore.table('District').query(
-      'SELECT district_id, name_en FROM District WHERE is_active = 1'
+      'SELECT DistrictID, DistrictName FROM District WHERE Active = 1'
     ).catch(() => []);
 
     let updated = 0;
     for (const row of districts) {
-      const districtId = row.District.district_id;
+      const districtId = row.District.DistrictID;
 
       // Fetch metrics for risk computation
       const [firCount, recidivism] = await Promise.all([
-        datastore.table('FIR').query(
-          `SELECT COUNT(*) AS cnt, SUM(CASE WHEN severity IN ('critical','high') THEN 1 ELSE 0 END) AS severe
-           FROM FIR WHERE district_id = ${districtId}
-           AND incident_date >= DATE_SUB(CURDATE(), INTERVAL 30 DAY)`
+        datastore.table('CaseMaster').query(
+          `SELECT COUNT(*) AS cnt
+           FROM CaseMaster cm
+           JOIN Unit u ON cm.PoliceStationID = u.UnitID
+           WHERE u.DistrictID = ${districtId}
+           AND cm.CrimeRegisteredDate >= DATE_SUB(CURDATE(), INTERVAL 30 DAY)`
         ).catch(() => []),
-        datastore.table('CriminalFIR').query(
-          `SELECT COUNT(*) AS cnt FROM CriminalFIR cf
-           JOIN FIR f ON cf.fir_id = f.fir_id
-           WHERE f.district_id = ${districtId}
-           AND f.incident_date >= DATE_SUB(CURDATE(), INTERVAL 30 DAY)`
+        datastore.table('Accused').query(
+          `SELECT COUNT(*) AS cnt
+           FROM Accused a
+           JOIN CaseMaster cm ON a.CaseMasterID = cm.CaseMasterID
+           JOIN Unit u ON cm.PoliceStationID = u.UnitID
+           WHERE u.DistrictID = ${districtId}
+           AND cm.CrimeRegisteredDate >= DATE_SUB(CURDATE(), INTERVAL 30 DAY)
+           GROUP BY a.AccusedName HAVING COUNT(*) > 1`
         ).catch(() => []),
       ]);
 
       const total    = parseInt(firCount[0]?.['COUNT(*)'] || 0);
-      const severe   = parseInt(firCount[0]?.['SUM(...)'] || 0);
-      const recidiCount = parseInt(recidivism[0]?.['COUNT(*)'] || 0);
+      const recidiCount = recidivism.length;
 
       // Simplified scoring formula (production would use ML model)
       const crimeRateScore    = Math.min(100, Math.round(total / 5));
@@ -147,17 +156,20 @@ module.exports.recomputeRiskScores = async (context) => {
       const overallScore      = Math.round(crimeRateScore * 0.4 + recidivismScore * 0.2 + socioScore * 0.25 + infraScore * 0.15);
       const riskLevel         = overallScore >= 65 ? 'critical' : overallScore >= 50 ? 'high' : overallScore >= 40 ? 'medium' : 'low';
 
-      await datastore.table('RiskScore').insertRow({
-        district_id:          districtId,
-        overall_score:        overallScore,
-        risk_level:           riskLevel,
-        crime_rate_score:     crimeRateScore,
-        recidivism_score:     recidivismScore,
-        socioeconomic_score:  socioScore,
-        infrastructure_score: infraScore,
-        trend:                'stable',
-        computed_at:          new Date().toISOString(),
-        valid_until:          new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
+      await datastore.table('IntelligenceFinding').insertRow({
+        DistrictID: districtId,
+        FindingType: 'risk',
+        Severity: riskLevel === 'critical' ? 'red' : riskLevel === 'high' ? 'orange' : riskLevel === 'medium' ? 'yellow' : 'green',
+        ConfidencePct: 82,
+        Summary: `District risk score ${overallScore}`,
+        Explanation: {
+          overallScore,
+          crimeRateScore,
+          recidivismScore,
+          socioeconomicScore: socioScore,
+          infrastructureScore: infraScore,
+        },
+        CreatedAt: new Date().toISOString(),
       }).catch(() => {});
 
       updated++;
@@ -174,7 +186,7 @@ module.exports.recomputeRiskScores = async (context) => {
 
 /**
  * Cron 4: Incremental CCTNS Sync
- * Schedule: 0 */6 * * * (every 6 hours)
+ * Schedule: every 6 hours
  */
 module.exports.cctnsIncrementalSync = async (context) => {
   const catalyst = require('catalyst-sdk');
@@ -202,6 +214,110 @@ module.exports.cctnsIncrementalSync = async (context) => {
 };
 
 /**
+ * Cron 6: Recent FIR Intelligence Index
+ * Schedule: every 30 minutes
+ */
+module.exports.indexRecentCrimeIntelligence = async (context) => {
+  const catalyst = require('catalyst-sdk');
+  const { analyzeCase, generateRepeatOffenderProfiles } = require('../functions/src/services/intelligenceEngine');
+
+  console.log('[CRON] Indexing recent CaseMaster intelligence...');
+
+  try {
+    const rows = await catalyst.datastore().table('CaseMaster').query(
+      `SELECT CaseMasterID
+       FROM CaseMaster
+       WHERE CrimeRegisteredDate >= DATE_SUB(CURDATE(), INTERVAL 7 DAY)
+       ORDER BY CrimeRegisteredDate DESC
+       LIMIT 200`
+    ).catch(() => []);
+
+    let analyzed = 0;
+    for (const row of rows) {
+      const caseMasterId = row.CaseMaster?.CaseMasterID || row.CaseMasterID;
+      const result = await analyzeCase(caseMasterId).catch(error => {
+        console.error(`[CRON] Case ${caseMasterId} analysis failed:`, error.message);
+        return null;
+      });
+      if (result) analyzed++;
+    }
+
+    const repeatProfiles = await generateRepeatOffenderProfiles(100).catch(() => []);
+    context.output = { success: true, analyzed, repeatProfiles: repeatProfiles.length };
+  } catch (err) {
+    console.error('[CRON] Intelligence index error:', err);
+    context.output = { success: false, error: err.message };
+  }
+};
+
+/**
+ * Cron 7: Hourly Hotspot Recompute
+ */
+module.exports.recomputeHotspotsHourly = async (context) => {
+  const catalyst = require('catalyst-sdk');
+  const signals = catalyst.signals();
+  try {
+    await signals.publish('HOTSPOT_RECOMPUTE_REQUESTED', {
+      window: 'hourly',
+      requestedAt: new Date().toISOString(),
+    });
+    context.output = { success: true, queued: true };
+  } catch (error) {
+    context.output = { success: false, error: error.message };
+  }
+};
+
+/**
+ * Cron 8: Nightly Model Retraining
+ */
+module.exports.retrainModelsNightly = async (context) => {
+  const { trainCandidateModel, detectDrift, indexEmbeddings } = require('../functions/src/services/mlLifecycle');
+  try {
+    const drift = await detectDrift({ limit: 1500 });
+    const embeddings = await indexEmbeddings(2000);
+    const trained = await trainCandidateModel({ target: 'risk', limit: 5000, builtBy: 'nightly-cron' });
+    context.output = { success: true, drift, embeddings, trainedStatus: trained.status };
+  } catch (error) {
+    context.output = { success: false, error: error.message };
+  }
+};
+
+/**
+ * Cron 9: Weekly SCRB Intelligence Report
+ */
+module.exports.generateWeeklyScrbReport = async (context) => {
+  const catalyst = require('catalyst-sdk');
+  try {
+    await catalyst.signals().publish('REPORT_GENERATION_QUEUED', {
+      reportType: 'SCRB',
+      period: 'weekly',
+      requestedBy: 'system',
+      requestedAt: new Date().toISOString(),
+    });
+    context.output = { success: true, report: 'weekly-scrb' };
+  } catch (error) {
+    context.output = { success: false, error: error.message };
+  }
+};
+
+/**
+ * Cron 10: Monthly Strategic Trend Report
+ */
+module.exports.generateMonthlyTrendReport = async (context) => {
+  const catalyst = require('catalyst-sdk');
+  try {
+    await catalyst.signals().publish('TREND_REPORT_REQUESTED', {
+      period: 'monthly',
+      requestedBy: 'system',
+      requestedAt: new Date().toISOString(),
+    });
+    context.output = { success: true, report: 'monthly-trend' };
+  } catch (error) {
+    context.output = { success: false, error: error.message };
+  }
+};
+
+/**
  * Cron 5: Stale Alert Cleanup
  * Schedule: 0 3 * * * (daily at 3 AM)
  */
@@ -213,19 +329,17 @@ module.exports.cleanupStaleAlerts = async (context) => {
 
   try {
     // Auto-resolve alerts that have been acknowledged > 72 hours ago
-    const result = await datastore.table('Alert').query(
-      `SELECT alert_id FROM Alert
-       WHERE status = 'acknowledged'
-       AND acknowledged_at < DATE_SUB(NOW(), INTERVAL 72 HOUR)`
+    const result = await datastore.table('IntelligenceFinding').query(
+      `SELECT FindingID FROM IntelligenceFinding
+       WHERE FindingType = 'anomaly'
+       AND CreatedAt < DATE_SUB(NOW(), INTERVAL 72 HOUR)`
     ).catch(() => []);
 
     let resolved = 0;
     for (const row of result) {
-      await datastore.table('Alert').updateRow({
-        alert_id:    row.Alert.alert_id,
-        status:      'resolved',
-        resolved_at: new Date().toISOString(),
-        resolved_by: 0, // System auto-resolve
+      await datastore.table('IntelligenceFinding').updateRow({
+        FindingID: row.IntelligenceFinding.FindingID,
+        Severity: 'green',
       }).catch(() => {});
       resolved++;
     }
