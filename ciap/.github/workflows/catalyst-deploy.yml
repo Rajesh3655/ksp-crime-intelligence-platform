@@ -1,0 +1,81 @@
+name: Catalyst CI/CD Pipeline
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+
+env:
+  CATALYST_PROJECT_ID: CIAP_KSP_PROD
+  CATALYST_ENVIRONMENT: production
+
+jobs:
+  build_and_test:
+    name: Build & Test
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: 'npm'
+
+      # ── Frontend ───────────────────────────────────────────────────────────
+      - name: Install Frontend Dependencies
+        run: npm ci
+
+      - name: Build Frontend
+        run: npm run build
+
+      # ── Backend ────────────────────────────────────────────────────────────
+      - name: Install Backend Dependencies
+        working-directory: ./backend/functions
+        run: npm ci
+
+      - name: Run Backend Tests
+        working-directory: ./backend/functions
+        run: npm test --passWithNoTests
+
+      - name: Run Linting
+        working-directory: ./backend/functions
+        run: npm run lint --if-present
+
+  deploy_to_catalyst:
+    name: Deploy to Zoho Catalyst
+    needs: build_and_test
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+
+      # Need to rebuild frontend for deployment (or download artifact from previous step)
+      - name: Build Frontend
+        run: |
+          npm ci
+          npm run build
+
+      - name: Install Catalyst CLI
+        run: npm install -g zcatalyst-cli
+
+      - name: Configure Catalyst Authentication
+        run: |
+          echo "Configuring Catalyst CLI..."
+          zcatalyst login --token ${{ secrets.CATALYST_CLI_TOKEN }}
+
+      - name: Deploy to Catalyst
+        run: |
+          zcatalyst deploy --project ${{ env.CATALYST_PROJECT_ID }} --org ${{ secrets.CATALYST_ORG_ID }} --env ${{ env.CATALYST_ENVIRONMENT }}
+        env:
+          NODE_ENV: production

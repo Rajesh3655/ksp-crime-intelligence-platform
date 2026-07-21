@@ -1,0 +1,17 @@
+{
+  "client": {
+    "source": "dist"
+  },
+  "functions": {
+    "targets": [
+      "ciap-backend-functions"
+    ],
+    "source": "backend/functions"
+  },
+  "circuits": {
+    "source": "backend/circuits"
+  },
+  "cron": {
+    "source": "backend/cron"
+  }
+}

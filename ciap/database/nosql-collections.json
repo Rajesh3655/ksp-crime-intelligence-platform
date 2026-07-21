@@ -1,0 +1,178 @@
+// ============================================================
+// Investigation Graph Collections — Catalyst NoSQL
+// ============================================================
+
+{
+  "collections": [
+    {
+      "name": "InvestigationGraph",
+      "description": "Network graph nodes and edges for link analysis",
+      "schema": {
+        "graph_id": "string (UUID)",
+        "case_id": "string (FIR number)",
+        "title": "string",
+        "created_by": "number (user_id)",
+        "status": "enum: active | archived | shared",
+        "nodes": [
+          {
+            "node_id": "string",
+            "label": "string",
+            "type": "enum: suspect | victim | vehicle | location | event | organization | phone | bank_account",
+            "risk_level": "enum: critical | high | medium | low",
+            "attributes": "object (type-specific data)",
+            "position": { "x": "number", "y": "number" },
+            "created_at": "ISO8601 datetime"
+          }
+        ],
+        "edges": [
+          {
+            "edge_id": "string",
+            "source_node_id": "string",
+            "target_node_id": "string",
+            "relationship": "enum: associate | known_to | spotted_at | owner | witness | victim_in | suspect_in | sibling | spouse | employer | employee | accomplice | funded_by",
+            "strength": "number 0-1",
+            "evidence_ref": "string (evidence_id)",
+            "created_at": "ISO8601 datetime"
+          }
+        ],
+        "timeline_events": [
+          {
+            "event_id": "string",
+            "node_id": "string",
+            "description": "string",
+            "description_kn": "string",
+            "occurred_at": "ISO8601 datetime",
+            "source": "string"
+          }
+        ],
+        "created_at": "ISO8601 datetime",
+        "updated_at": "ISO8601 datetime"
+      }
+    },
+
+    {
+      "name": "AIChatSession",
+      "description": "AI Copilot conversation sessions per user",
+      "schema": {
+        "session_id": "string (UUID)",
+        "user_id": "number",
+        "language": "enum: en | kn",
+        "context_page": "string (current page path)",
+        "messages": [
+          {
+            "message_id": "string",
+            "role": "enum: user | assistant | system",
+            "content": "string",
+            "timestamp": "ISO8601 datetime",
+            "tokens_used": "number",
+            "model": "string"
+          }
+        ],
+        "created_at": "ISO8601 datetime",
+        "last_active_at": "ISO8601 datetime",
+        "is_active": "boolean"
+      }
+    },
+
+    {
+      "name": "HotspotAnalysis",
+      "description": "ML-computed hotspot clusters for geo visualization",
+      "schema": {
+        "analysis_id": "string (UUID)",
+        "computed_at": "ISO8601 datetime",
+        "valid_until": "ISO8601 datetime",
+        "crime_type": "string (or 'all')",
+        "time_range": {
+          "start": "ISO8601 date",
+          "end": "ISO8601 date"
+        },
+        "clusters": [
+          {
+            "cluster_id": "string",
+            "centroid": { "lat": "number", "lng": "number" },
+            "radius_km": "number",
+            "incident_count": "number",
+            "risk_level": "enum: critical | high | medium | low",
+            "dominant_crime_type": "string",
+            "confidence": "number 0-1",
+            "polygon_coords": "array of [lat, lng] pairs"
+          }
+        ],
+        "model": "string",
+        "algorithm": "enum: DBSCAN | KMeans | HDBSCAN"
+      }
+    },
+
+    {
+      "name": "AnomalyEvent",
+      "description": "Detected statistical anomalies that trigger alerts",
+      "schema": {
+        "anomaly_id": "string (UUID)",
+        "detected_at": "ISO8601 datetime",
+        "district_id": "number",
+        "crime_type": "string",
+        "metric": "string (e.g. incident_count_hourly)",
+        "observed_value": "number",
+        "expected_value": "number",
+        "z_score": "number",
+        "sigma_threshold": "number",
+        "alert_triggered": "boolean",
+        "alert_id": "number (Alert table reference)",
+        "signal_id": "string (Catalyst Signal ID)",
+        "explanation": "string",
+        "status": "enum: new | processed | dismissed"
+      }
+    },
+
+    {
+      "name": "ResourceDeployment",
+      "description": "Real-time resource allocation and patrol tracking",
+      "schema": {
+        "deployment_id": "string (UUID)",
+        "district_id": "number",
+        "station_id": "number",
+        "deployment_date": "ISO8601 date",
+        "resources": {
+          "personnel_total": "number",
+          "personnel_deployed": "number",
+          "vehicles_total": "number",
+          "vehicles_deployed": "number",
+          "special_units": "array of strings"
+        },
+        "patrol_zones": [
+          {
+            "zone_id": "string",
+            "name": "string",
+            "officers_assigned": "number",
+            "vehicles_assigned": "number",
+            "risk_level": "enum: critical | high | medium | low",
+            "patrol_type": "enum: foot | mobile | static"
+          }
+        ],
+        "incidents_in_period": "number",
+        "utilization_pct": "number",
+        "created_at": "ISO8601 datetime",
+        "updated_at": "ISO8601 datetime"
+      }
+    },
+
+    {
+      "name": "CCTNSSyncLog",
+      "description": "CCTNS integration sync logs and reconciliation",
+      "schema": {
+        "sync_id": "string (UUID)",
+        "sync_type": "enum: full | incremental | manual",
+        "started_at": "ISO8601 datetime",
+        "completed_at": "ISO8601 datetime",
+        "status": "enum: running | completed | failed | partial",
+        "records_fetched": "number",
+        "records_inserted": "number",
+        "records_updated": "number",
+        "records_skipped": "number",
+        "records_failed": "number",
+        "errors": "array of error objects",
+        "triggered_by": "enum: cron | manual | api"
+      }
+    }
+  ]
+}

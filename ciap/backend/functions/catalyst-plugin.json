@@ -1,0 +1,15 @@
+{
+  "type": "advancedio",
+  "name": "ciap-backend-functions",
+  "language": "nodejs",
+  "framework": "express",
+  "entry": "index.js",
+  "env": {
+    "NODE_ENV": "production",
+    "LOG_LEVEL": "info",
+    "JWT_SECRET": "ksp-ciap-prod-secret-2026",
+    "QUICKML_COPILOT_MODEL_ID": "model_quickml_rag_ksp_v1",
+    "ZIA_FORECAST_MODEL_ID": "model_zia_lstm_forecast_v2",
+    "REPORT_TEMPLATE_URL": "https://ciap.ksp.gov.in/report-template"
+  }
+}
